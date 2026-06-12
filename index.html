@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrUNO - Das ultimative Online-Kartenspiel</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 
+        PRODUCTION NOTICE: For production, install Tailwind CSS via npm:
+        npm install -D tailwindcss postcss autoprefixer
+        npx tailwindcss init -p
+        
+        Then build CSS:
+        npx tailwindcss -i ./src/input.css -o ./dist/output.css --watch
+    -->
+    <link rel="stylesheet" href="./output.css">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -379,23 +386,21 @@
         </div>
     </main>
 
-    <!-- MODALS -->
-
     <!-- CUSTOM ALERT MODAL (No Browser Alerts Rule) -->
-    <div id="custom-alert-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden">
+    <div id="custom-alert-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" aria-describedby="alert-message">
         <div class="bg-stone-900 border border-white/15 max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl">
             <div class="w-12 h-12 bg-rose-500/20 border border-rose-500 text-rose-400 rounded-full flex items-center justify-center text-xl mx-auto mb-4">⚠️</div>
-            <h3 class="text-lg font-bold text-white mb-2" id="alert-title">Hinweis</h3>
-            <p class="text-stone-300 text-xs leading-relaxed mb-6" id="alert-message">Ein Fehler ist aufgetreten.</p>
+            <h2 id="alert-title" class="text-lg font-bold text-white mb-2">Hinweis</h2>
+            <p id="alert-message" class="text-stone-300 text-xs leading-relaxed mb-6">Ein Fehler ist aufgetreten.</p>
             <button onclick="closeAlertModal()" class="w-full bg-white/10 hover:bg-white/15 border border-white/10 text-white font-bold py-2.5 rounded-xl text-xs transition-colors">Schließen</button>
         </div>
     </div>
 
     <!-- SOLIDARITÄTS-TARGETS -->
-    <div id="solidarity-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="solidarity-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="solidarity-title" aria-describedby="solidarity-description">
         <div class="bg-stone-900 border border-white/10 max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl">
-            <h2 class="text-xl font-bold text-white mb-2">💖 Solidarität zeigen!</h2>
-            <p class="text-stone-400 text-xs mb-6">Wähle einen Partner aus. Ihr beide dürft jeweils zwei Karten abwerfen!</p>
+            <h2 id="solidarity-title" class="text-xl font-bold text-white mb-2">💖 Solidarität zeigen!</h2>
+            <p id="solidarity-description" class="text-stone-400 text-xs mb-6">Wähle einen Partner aus. Ihr beide dürft jeweils zwei Karten abwerfen!</p>
             <div id="solidarity-targets" class="space-y-3">
                 <!-- Spieler Buttons -->
             </div>
@@ -403,20 +408,20 @@
     </div>
 
     <!-- FARBWAHL -->
-    <div id="color-choice-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="color-choice-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="color-choice-title">
         <div class="bg-stone-900 border border-white/10 max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl">
-            <h2 class="text-xl font-bold text-white mb-6">Wähle eine neue Spielfarbe! 🎨</h2>
+            <h2 id="color-choice-title" class="text-xl font-bold text-white mb-6">Wähle eine neue Spielfarbe! 🎨</h2>
             <div class="grid grid-cols-2 gap-4">
-                <button onclick="selectColor('Rot')" class="h-16 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                <button onclick="selectColor('Rot')" class="h-16 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md" aria-label="Rot wählen">
                     Rot 🔴
                 </button>
-                <button onclick="selectColor('Grün')" class="h-16 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                <button onclick="selectColor('Grün')" class="h-16 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md" aria-label="Grün wählen">
                     Grün 🟢
                 </button>
-                <button onclick="selectColor('Blau')" class="h-16 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                <button onclick="selectColor('Blau')" class="h-16 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md" aria-label="Blau wählen">
                     Blau 🔵
                 </button>
-                <button onclick="selectColor('Lila')" class="h-16 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                <button onclick="selectColor('Lila')" class="h-16 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md" aria-label="Lila wählen">
                     Lila 🟣
                 </button>
             </div>
@@ -424,7 +429,7 @@
     </div>
 
     <!-- SPIELENDE -->
-    <div id="game-over-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="game-over-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="game-over-title" aria-describedby="game-over-message">
         <div class="bg-stone-900 border border-white/10 max-w-md w-full rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
             <h2 id="game-over-title" class="text-3xl font-bold text-white mb-4">🏆 SPIEL BEENDET!</h2>
             <p id="game-over-message" class="text-stone-300 text-sm mb-6">Spiel beendet</p>
@@ -457,15 +462,23 @@
         let firebaseConfig = {};
         try {
             firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-                apiKey: "",
-                authDomain: "mock-bruno.firebaseapp.com",
-                projectId: "mock-bruno",
-                storageBucket: "mock-bruno.appspot.com",
-                messagingSenderId: "123",
-                appId: "123"
+                apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "",
+                authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "bruno-online.firebaseapp.com",
+                projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "bruno-online",
+                storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "bruno-online.appspot.com",
+                messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "000000000000",
+                appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:000000000000:web:0000000000000000000000"
             };
         } catch (e) {
             console.warn("Injected Firebase configuration could not be parsed. Using fallback.", e);
+        }
+
+        // Validate Firebase Configuration
+        if (!firebaseConfig.apiKey) {
+            console.error("Firebase API Key is not configured. Please set the REACT_APP_FIREBASE_API_KEY environment variable.");
+            setTimeout(() => {
+                window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte überprüfe deine Umgebungsvariablen:\n- REACT_APP_FIREBASE_API_KEY\n- REACT_APP_FIREBASE_PROJECT_ID\n\nKonfiguriere diese in deiner .env-Datei.");
+            }, 500);
         }
 
         const app = initializeApp(firebaseConfig);
