@@ -532,6 +532,8 @@
 
         const supabase = createClient(supabaseConfig.supabaseUrl, supabaseConfig.supabaseAnonKey);
         const appId = window.__app_id || 'bruno-lobby-game';
+        // Compatibility placeholder so legacy `doc(db, ...)` calls don't throw.
+        const db = {};
 
         // --- GLOBAL GAME STATE ---
         let user = null;
