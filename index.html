@@ -163,8 +163,9 @@
         </div>
     </div>
 
-    <!-- START & LOBBY INTERFACE -->
-    <div id="screen-lobby" class="flex-1 flex flex-col items-center justify-center p-6">
+    <main class="flex-1">
+        <!-- START & LOBBY INTERFACE -->
+        <div id="screen-lobby" class="flex-1 flex flex-col items-center justify-center p-6">
         <div class="max-w-md w-full bg-white/5 border border-white/10 p-8 rounded-3xl shadow-2xl backdrop-blur-xl text-center">
             <div class="inline-block transform rotate-[-2deg] mb-6">
                 <div class="bg-gradient-to-r from-red-500 via-amber-500 to-blue-500 px-8 py-3 rounded-2xl shadow-lg border border-white/20">
@@ -384,7 +385,6 @@
                 </div>
             </div>
         </div>
-    </main>
 
     <!-- CUSTOM ALERT MODAL (No Browser Alerts Rule) -->
     <div id="custom-alert-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" aria-describedby="alert-message">
@@ -447,12 +447,36 @@
         </div>
     </div>
 
+    <div id="rules-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title" aria-describedby="rules-modal-description">
+        <div class="bg-stone-900 border border-white/10 max-w-lg w-full rounded-3xl p-6 text-left shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="rules-modal-title" class="text-xl font-bold text-white">Spielregeln</h2>
+                <button onclick="closeRulesModal()" class="text-stone-300 hover:text-white">Schließen</button>
+            </div>
+            <p id="rules-modal-description" class="text-stone-300 text-sm leading-relaxed mb-4">Hier werden die Regeln für BrUNO angezeigt. Diese Übersicht hilft beim Einstieg ins Spiel.</p>
+            <ul class="list-disc list-inside text-stone-400 text-sm space-y-2">
+                <li>Erstelle oder trete einer Lobby bei.</li>
+                <li>Der Host startet das Spiel.</li>
+                <li>Lege passende Karten ab oder ziehe neue Karten.</li>
+                <li>Rufe BrUNO, bevor du deine vorletzte Karte spielst.</li>
+            </ul>
+        </div>
+    </div>
+
+    </main>
+
     <!-- FOOTER -->
     <footer class="bg-black/40 text-stone-600 text-center py-3 text-[10px] sm:text-xs border-t border-white/5 backdrop-blur-md">
         BrUNO Online • Modernes Web-Multiplayer Kartenspiel :3
     </footer>
 
     <!-- FIREBASE & GAME LOGIC SCRIPTS -->
+    <script>
+        // Runtime-injected Firebase configuration should be defined before the application module starts.
+        // Example injection by hosting or build system:
+        // window.__firebase_config = { apiKey: 'YOUR_API_KEY', authDomain: 'YOUR_AUTH_DOMAIN', projectId: 'YOUR_PROJECT_ID', storageBucket: 'YOUR_STORAGE_BUCKET', messagingSenderId: 'YOUR_MESSAGING_SENDER_ID', appId: 'YOUR_APP_ID' };
+        window.__firebase_config = window.__firebase_config || {};
+    </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -480,10 +504,10 @@
         };
 
         try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = typeof __firebase_config === 'string'
-                    ? JSON.parse(__firebase_config)
-                    : __firebase_config;
+            if (window.__firebase_config && Object.keys(window.__firebase_config).length > 0) {
+                firebaseConfig = typeof window.__firebase_config === 'string'
+                    ? JSON.parse(window.__firebase_config)
+                    : window.__firebase_config;
             } else {
                 firebaseConfig = defaultFirebaseConfig;
             }
@@ -495,14 +519,14 @@
         // Validate Firebase Configuration
         if (!firebaseConfig.apiKey) {
             console.error("Firebase API Key is not configured.");
-            window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte prüfe deinen Build oder dein Hosting-Setup und stelle sicher, dass der Firebase-Konfigurationswert \`__firebase_config\` gesetzt ist.");
-            throw new Error("Firebase API Key is not configured.");
+            window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte prüfe deinen Build oder dein Hosting-Setup und stelle sicher, dass der Firebase-Konfigurationswert `window.__firebase_config` gesetzt ist.\n\nBeispiel:\n<script>window.__firebase_config = { apiKey: 'YOUR_API_KEY', authDomain: 'YOUR_AUTH_DOMAIN', projectId: 'YOUR_PROJECT_ID', storageBucket: 'YOUR_STORAGE_BUCKET', messagingSenderId: 'YOUR_MESSAGING_SENDER_ID', appId: 'YOUR_APP_ID' };</script>");
+            return;
         }
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'bruno-lobby-game';
+        const appId = window.__app_id || 'bruno-lobby-game';
 
         // --- GLOBAL GAME STATE ---
         let user = null;
@@ -512,16 +536,6 @@
         let isSolidarityPlay = false;
         let hasPlayedIntroAnim = false;
         let isAuthReady = false;
-
-        // --- ALERT UTILITY (REPLACES WINDOW.ALERT) ---
-        window.showAlert = function(title, message) {
-            document.getElementById('alert-title').innerText = title;
-            document.getElementById('alert-message').innerText = message;
-            document.getElementById('custom-alert-modal').classList.remove('hidden');
-        };
-        window.closeAlertModal = function() {
-            document.getElementById('custom-alert-modal').classList.add('hidden');
-        };
 
         // --- SOUNDENGINE (Synthesizer) ---
         let soundEnabled = true;
@@ -672,6 +686,11 @@
             soundEnabled = !soundEnabled;
             const icon = document.getElementById('sound-icon');
             icon.innerText = soundEnabled ? '🔊' : '🔇';
+        };
+
+        window.triggerBrunoCall = function() {
+            playSynthSound('special');
+            window.showAlert('BrUNO gerufen!', 'Du hast erfolgreich BrUNO gerufen. Das Spiel synchronisiert deinen Ruf.');
         };
 
         // --- CHAT TABS SWITCH ---
