@@ -752,9 +752,10 @@
         async function getDoc(ref) {
             const { data, error } = await supabase.from('lobbies').select('*').eq('lobbyId', ref.id).maybeSingle();
             if (error) throw error;
+            const normalized = normalizeLobbyRow(data);
             return {
-                exists: () => !!data,
-                data: () => data
+                exists: () => !!normalized,
+                data: () => normalized
             };
         }
 
@@ -768,7 +769,8 @@
             const channel = supabase.channel('public:lobbies:' + ref.id);
             channel.on('postgres_changes', { event: '*', schema: 'public', table: 'lobbies', filter: `lobbyId=eq.${ref.id}` }, (payload) => {
                 try {
-                    onNext({ exists: () => !!payload.new, data: () => payload.new });
+                    const normalized = normalizeLobbyRow(payload.new);
+                    onNext({ exists: () => !!normalized, data: () => normalized });
                 } catch (e) { console.error(e); }
             });
             channel.subscribe();
@@ -994,15 +996,26 @@
         function subscribeToLobby(code) {
             if (unsubscribeLobby) unsubscribeLobby();
 
-            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code);
-            
-            unsubscribeLobby = onSnapshot(lobbyRef, (docSnap) => {
-                if (!docSnap.exists()) return;
-                currentLobby = docSnap.data();
-                renderLobbyState();
-            }, (error) => {
-                console.error("Lobby-Subscription Fehler:", error);
+            // Use direct Supabase subscription with normalization
+            (async () => {
+                try {
+                    const initial = await dbGetLobby(code);
+                    if (initial) {
+                        currentLobby = initial;
+                        renderLobbyState();
+                    }
+                } catch (e) { console.error('Initial lobby fetch failed', e); }
+            })();
+
+            const channel = supabase.channel('public:lobbies:' + code);
+            channel.on('postgres_changes', { event: '*', schema: 'public', table: 'lobbies', filter: `lobbyId=eq.${code}` }, (payload) => {
+                if (payload?.new) {
+                    currentLobby = normalizeLobbyRow(payload.new);
+                    renderLobbyState();
+                }
             });
+            channel.subscribe();
+            unsubscribeLobby = () => channel.unsubscribe();
 
             document.getElementById('screen-lobby').classList.add('hidden');
             document.getElementById('screen-waiting').classList.remove('hidden');
@@ -1394,49 +1407,82 @@
 
         // --- HOST STARTET DAS SPIEL ---
         window.startGame = async function() {
-            if (!currentLobby || currentLobby.hostId !== user.uid) return;
-
-            await ensureUser();
-
-            let finalDeck = createDeck();
-            
-            const updatedPlayers = currentLobby.players.map(p => {
-                const cards = [];
-                for (let i = 0; i < 7; i++) {
-                    cards.push(finalDeck.pop());
-                }
-                return {
-                    ...p,
-                    cards: cards,
-                    shieldActive: false,
-                    calledBruno: false
+            try {
+                const debug = msg => {
+                    console.log(msg);
+                    const debugEl = document.getElementById('debug-status');
+                    if (debugEl) debugEl.innerText = msg;
                 };
-            });
 
-            let firstCard = finalDeck.pop();
-            while (firstCard.isWild) {
-                finalDeck.unshift(firstCard);
-                firstCard = finalDeck.pop();
+                debug("startGame called");
+                if (!currentLobby) {
+                    debug("ERROR: currentLobby is null");
+                    return;
+                }
+                if (!user) {
+                    debug("ERROR: user is null");
+                    return;
+                }
+                debug("Checking host: hostId=" + currentLobby.hostId + ", user.uid=" + user.uid);
+                if (currentLobby.hostId !== user.uid) {
+                    debug("ERROR: not host");
+                    return;
+                }
+
+                await ensureUser();
+                debug("User ensured");
+
+                let finalDeck = createDeck();
+                debug("Deck created: " + finalDeck.length + " cards");
+                
+                const updatedPlayers = currentLobby.players.map(p => {
+                    const cards = [];
+                    for (let i = 0; i < 7; i++) {
+                        cards.push(finalDeck.pop());
+                    }
+                    return {
+                        ...p,
+                        cards: cards,
+                        shieldActive: false,
+                        calledBruno: false
+                    };
+                });
+                debug("Players dealt");
+
+                let firstCard = finalDeck.pop();
+                while (firstCard.isWild) {
+                    finalDeck.unshift(firstCard);
+                    firstCard = finalDeck.pop();
+                }
+                debug("First card: " + firstCard.color + " " + firstCard.value);
+
+                const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+                debug("Updating lobby...");
+                
+                await updateDoc(lobbyRef, {
+                    status: 'playing',
+                    deck: finalDeck,
+                    players: updatedPlayers,
+                    discardPile: [firstCard],
+                    activeColor: firstCard.color,
+                    activeValue: firstCard.value,
+                    currentPlayerIndex: 0,
+                    playDirection: 1,
+                    accumulatedDraws: 0,
+                    hasDrawnThisTurn: false,
+                    winners: [],
+                    chat: [],
+                    gameLogs: ["Das Spiel wurde gestartet!", `Erste Karte ist ${getColorEmoji(firstCard.color)} ${firstCard.color} ${firstCard.value}.`]
+                });
+
+                debug("Lobby updated - status should be 'playing' now");
+                playSynthSound('special');
+            } catch (err) {
+                console.error("startGame error:", err);
+                const debugEl = document.getElementById('debug-status');
+                if (debugEl) debugEl.innerText = "ERROR: " + err.message;
+                window.showAlert("Fehler beim Starten", "Spiel konnte nicht gestartet werden: " + err.message);
             }
-
-            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
-            await updateDoc(lobbyRef, {
-                status: 'playing',
-                deck: finalDeck,
-                players: updatedPlayers,
-                discardPile: [firstCard],
-                activeColor: firstCard.color,
-                activeValue: firstCard.value,
-                currentPlayerIndex: 0,
-                playDirection: 1,
-                accumulatedDraws: 0,
-                hasDrawnThisTurn: false,
-                winners: [],
-                chat: [],
-                gameLogs: ["Das Spiel wurde gestartet!", `Erste Karte ist ${getColorEmoji(firstCard.color)} ${firstCard.color} ${firstCard.value}.`]
-            });
-
-            playSynthSound('special');
         };
 
         // --- KARTE LEGEN ---
