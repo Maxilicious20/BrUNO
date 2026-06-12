@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "BrUNO - Das ultimative Online-Kartenspiel",
   "scripts": {
-    "dev": "tailwindcss -i ./src/input.css -o ./output.css --watch",
-    "build": "tailwindcss -i ./src/input.css -o ./output.css --minify",
+    "dev": "npx tailwindcss -i ./src/input.css -o ./output.css --watch",
+    "build": "npx tailwindcss -i ./src/input.css -o ./output.css --minify",
     "build:prod": "npm run build && echo 'CSS built successfully'"
   },
   "keywords": [
