@@ -458,27 +458,45 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- ALERT UTILITY (REPLACES WINDOW.ALERT) ---
+        window.showAlert = function(title, message) {
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-message').innerText = message;
+            document.getElementById('custom-alert-modal').classList.remove('hidden');
+        };
+        window.closeAlertModal = function() {
+            document.getElementById('custom-alert-modal').classList.add('hidden');
+        };
+
         // Fallback Firebase Configuration Setup gracefully if not injected (avoids Vercel crashes)
         let firebaseConfig = {};
+        const defaultFirebaseConfig = {
+            apiKey: "",
+            authDomain: "bruno-online.firebaseapp.com",
+            projectId: "bruno-online",
+            storageBucket: "bruno-online.appspot.com",
+            messagingSenderId: "000000000000",
+            appId: "1:000000000000:web:0000000000000000000000"
+        };
+
         try {
-            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-                apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "",
-                authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "bruno-online.firebaseapp.com",
-                projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "bruno-online",
-                storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "bruno-online.appspot.com",
-                messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "000000000000",
-                appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:000000000000:web:0000000000000000000000"
-            };
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = typeof __firebase_config === 'string'
+                    ? JSON.parse(__firebase_config)
+                    : __firebase_config;
+            } else {
+                firebaseConfig = defaultFirebaseConfig;
+            }
         } catch (e) {
             console.warn("Injected Firebase configuration could not be parsed. Using fallback.", e);
+            firebaseConfig = defaultFirebaseConfig;
         }
 
         // Validate Firebase Configuration
         if (!firebaseConfig.apiKey) {
-            console.error("Firebase API Key is not configured. Please set the REACT_APP_FIREBASE_API_KEY environment variable.");
-            setTimeout(() => {
-                window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte überprüfe deine Umgebungsvariablen:\n- REACT_APP_FIREBASE_API_KEY\n- REACT_APP_FIREBASE_PROJECT_ID\n\nKonfiguriere diese in deiner .env-Datei.");
-            }, 500);
+            console.error("Firebase API Key is not configured.");
+            window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte prüfe deinen Build oder dein Hosting-Setup und stelle sicher, dass der Firebase-Konfigurationswert \`__firebase_config\` gesetzt ist.");
+            throw new Error("Firebase API Key is not configured.");
         }
 
         const app = initializeApp(firebaseConfig);
