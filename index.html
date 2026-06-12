@@ -165,7 +165,13 @@
                 </div>
             </div>
             
-            <p class="text-stone-300 text-sm mb-8">Das ultimative, moderne Multiplayer-Kartenspiel. Spiele live über einen Lobby-Code mit deinen Freunden in Echtzeit!</p>
+            <p class="text-stone-300 text-sm mb-6">Das ultimative, moderne Multiplayer-Kartenspiel. Spiele live über einen Lobby-Code mit deinen Freunden in Echtzeit!</p>
+
+            <!-- Status Indicator -->
+            <div id="connection-status" class="mb-6 py-2 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center justify-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Verbinde mit dem Server...
+            </div>
 
             <!-- Spielername Input -->
             <div class="mb-6 text-left">
@@ -185,7 +191,7 @@
 
             <!-- Create Form -->
             <div id="form-create" class="space-y-4">
-                <button onclick="createLobby()" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-amber-500/20">
+                <button id="btn-create-lobby" onclick="createLobby()" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-amber-500/20 disabled:opacity-45 disabled:pointer-events-none" disabled>
                     Lobby eröffnen 🔑
                 </button>
             </div>
@@ -193,7 +199,7 @@
             <!-- Join Form -->
             <div id="form-join" class="space-y-4 hidden">
                 <input id="input-lobby-code" type="text" placeholder="4-STELLIGER CODE" maxlength="4" class="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-xl text-center text-xl font-bold tracking-widest uppercase focus:outline-none focus:border-amber-500">
-                <button onclick="joinLobby()" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-500/20">
+                <button id="btn-join-lobby" onclick="joinLobby()" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-500/20 disabled:opacity-45 disabled:pointer-events-none" disabled>
                     Spiel beitreten 🚀
                 </button>
             </div>
@@ -344,7 +350,7 @@
                 Spielfarbe: <span id="active-color-name">-</span>
             </div>
 
-            <!-- CONTROLS (Passen entfernt, BrUNO Knopf optimiert) -->
+            <!-- CONTROLS -->
             <div class="flex gap-3 justify-center w-full max-w-md">
                 <button id="btn-uno" onclick="triggerBrunoCall()" class="w-full bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-stone-950 font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm sm:text-base">
                     📢 "BrUNO!" rufen
@@ -374,6 +380,16 @@
     </main>
 
     <!-- MODALS -->
+
+    <!-- CUSTOM ALERT MODAL (No Browser Alerts Rule) -->
+    <div id="custom-alert-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden">
+        <div class="bg-stone-900 border border-white/15 max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl">
+            <div class="w-12 h-12 bg-rose-500/20 border border-rose-500 text-rose-400 rounded-full flex items-center justify-center text-xl mx-auto mb-4">⚠️</div>
+            <h3 class="text-lg font-bold text-white mb-2" id="alert-title">Hinweis</h3>
+            <p class="text-stone-300 text-xs leading-relaxed mb-6" id="alert-message">Ein Fehler ist aufgetreten.</p>
+            <button onclick="closeAlertModal()" class="w-full bg-white/10 hover:bg-white/15 border border-white/10 text-white font-bold py-2.5 rounded-xl text-xs transition-colors">Schließen</button>
+        </div>
+    </div>
 
     <!-- SOLIDARITÄTS-TARGETS -->
     <div id="solidarity-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
@@ -437,8 +453,21 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Setup (MANDATORY setup)
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Fallback Firebase Configuration Setup gracefully if not injected (avoids Vercel crashes)
+        let firebaseConfig = {};
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+                apiKey: "",
+                authDomain: "mock-bruno.firebaseapp.com",
+                projectId: "mock-bruno",
+                storageBucket: "mock-bruno.appspot.com",
+                messagingSenderId: "123",
+                appId: "123"
+            };
+        } catch (e) {
+            console.warn("Injected Firebase configuration could not be parsed. Using fallback.", e);
+        }
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -451,6 +480,17 @@
         let isWaitingForColorSelection = false;
         let isSolidarityPlay = false;
         let hasPlayedIntroAnim = false;
+        let isAuthReady = false;
+
+        // --- ALERT UTILITY (REPLACES WINDOW.ALERT) ---
+        window.showAlert = function(title, message) {
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-message').innerText = message;
+            document.getElementById('custom-alert-modal').classList.remove('hidden');
+        };
+        window.closeAlertModal = function() {
+            document.getElementById('custom-alert-modal').classList.add('hidden');
+        };
 
         // --- SOUNDENGINE (Synthesizer) ---
         let soundEnabled = true;
@@ -525,20 +565,51 @@
             return array;
         }
 
-        // --- AUTH SETUP (RULE 3) ---
+        // --- AUTH SETUP & CONNECTION STATE CHECK (RULE 3) ---
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Firebase Authentication failed:", err);
+                document.getElementById('connection-status').className = "mb-6 py-2 px-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center";
+                document.getElementById('connection-status').innerHTML = "Server-Verbindung fehlgeschlagen. Überprüfe die Firebase-Konfiguration!";
             }
         };
 
         onAuthStateChanged(auth, (currentUser) => {
             if (currentUser) {
                 user = currentUser;
+                isAuthReady = true;
+                
+                // Update UI state
+                const statusIndicator = document.getElementById('connection-status');
+                statusIndicator.className = "mb-6 py-2 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center justify-center gap-2";
+                statusIndicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Bereit zum Spielen!';
+                
+                // Enable Lobby buttons
+                document.getElementById('btn-create-lobby').removeAttribute('disabled');
+                document.getElementById('btn-join-lobby').removeAttribute('disabled');
             }
         });
+
+        // Safe auth promise resolver wrapper
+        async function ensureAuth() {
+            if (isAuthReady && user) return user;
+            return new Promise((resolve, reject) => {
+                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                    if (u) {
+                        user = u;
+                        isAuthReady = true;
+                        unsubscribe();
+                        resolve(u);
+                    }
+                }, reject);
+            });
+        }
 
         initAuth();
 
@@ -606,6 +677,8 @@
             const text = input.value.trim();
             if (!text || !currentLobby) return;
 
+            await ensureAuth();
+
             const me = currentLobby.players.find(p => p.id === user.uid);
             const senderName = me ? me.name : "Spieler";
 
@@ -617,7 +690,7 @@
                 timestamp: Date.now()
             });
 
-            if (chat.length > 30) chat.shift(); // Letzte 30 Nachrichten behalten
+            if (chat.length > 30) chat.shift();
 
             input.value = '';
 
@@ -642,91 +715,112 @@
 
         // --- LOBBY ERSTELLEN ---
         window.createLobby = async function() {
-            if (!user) {
-                playSynthSound('error');
-                return;
+            try {
+                // Ensure fully authenticated first (RULE 3 compliance)
+                const currentAuthedUser = await ensureAuth();
+                if (!currentAuthedUser) {
+                    window.showAlert("Verbindungsfehler", "Die Anmeldung am Server läuft noch. Bitte versuche es in wenigen Sekunden erneut!");
+                    playSynthSound('error');
+                    return;
+                }
+
+                const name = getUsername();
+                const code = generateCode();
+                lobbyId = code;
+
+                const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+                const initialLobby = {
+                    lobbyId: lobbyId,
+                    hostId: currentAuthedUser.uid,
+                    status: 'waiting',
+                    players: [{
+                        id: currentAuthedUser.uid,
+                        name: name,
+                        cards: [],
+                        shieldActive: false,
+                        calledBruno: false,
+                        isReady: true
+                    }],
+                    deck: [],
+                    discardPile: [],
+                    activeColor: 'Rot',
+                    activeValue: '7',
+                    currentPlayerIndex: 0,
+                    playDirection: 1,
+                    accumulatedDraws: 0,
+                    hasDrawnThisTurn: false,
+                    winners: [],
+                    chat: [],
+                    gameLogs: ["Lobby wurde erfolgreich erstellt!"]
+                };
+
+                await setDoc(lobbyRef, initialLobby);
+                subscribeToLobby(lobbyId);
+            } catch (err) {
+                console.error("Failed to create lobby:", err);
+                window.showAlert("Fehler beim Erstellen", "Die Lobby konnte nicht erstellt werden. Prüfe deine Verbindung.");
             }
-            const name = getUsername();
-            const code = generateCode();
-            lobbyId = code;
-
-            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
-            const initialLobby = {
-                lobbyId: lobbyId,
-                hostId: user.uid,
-                status: 'waiting',
-                players: [{
-                    id: user.uid,
-                    name: name,
-                    cards: [],
-                    shieldActive: false,
-                    calledBruno: false,
-                    isReady: true
-                }],
-                deck: [],
-                discardPile: [],
-                activeColor: 'Rot',
-                activeValue: '7',
-                currentPlayerIndex: 0,
-                playDirection: 1,
-                accumulatedDraws: 0,
-                hasDrawnThisTurn: false,
-                winners: [],
-                chat: [],
-                gameLogs: ["Lobby wurde erfolgreich erstellt!"]
-            };
-
-            await setDoc(lobbyRef, initialLobby);
-            subscribeToLobby(lobbyId);
         };
 
         // --- LOBBY BEITRETEN ---
         window.joinLobby = async function() {
-            if (!user) return;
-            const code = document.getElementById('input-lobby-code').value.trim().toUpperCase();
-            if (code.length !== 4) {
-                playSynthSound('error');
-                return;
+            try {
+                const currentAuthedUser = await ensureAuth();
+                if (!currentAuthedUser) {
+                    window.showAlert("Verbindungsfehler", "Die Anmeldung am Server läuft noch. Bitte versuche es gleich noch einmal!");
+                    playSynthSound('error');
+                    return;
+                }
+
+                const code = document.getElementById('input-lobby-code').value.trim().toUpperCase();
+                if (code.length !== 4) {
+                    window.showAlert("Ungültiger Code", "Der Lobby-Code muss genau 4 Zeichen lang sein!");
+                    playSynthSound('error');
+                    return;
+                }
+
+                const name = getUsername();
+                const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code);
+                const docSnap = await getDoc(lobbyRef);
+
+                if (!docSnap.exists()) {
+                    window.showAlert("Lobby nicht gefunden", "Der eingegebene 4-stellige Lobby-Code existiert nicht!");
+                    playSynthSound('error');
+                    return;
+                }
+
+                const lobbyData = docSnap.data();
+                if (lobbyData.status !== 'waiting') {
+                    window.showAlert("Spiel läuft bereits", "Diese Lobby hat das Spiel bereits gestartet oder es ist beendet!");
+                    playSynthSound('error');
+                    return;
+                }
+
+                if (lobbyData.players.length >= 4) {
+                    window.showAlert("Lobby voll", "In dieser Lobby befinden sich bereits die maximalen 4 Spieler!");
+                    playSynthSound('error');
+                    return;
+                }
+
+                if (!lobbyData.players.find(p => p.id === currentAuthedUser.uid)) {
+                    lobbyData.players.push({
+                        id: currentAuthedUser.uid,
+                        name: name,
+                        cards: [],
+                        shieldActive: false,
+                        calledBruno: false,
+                        isReady: true
+                    });
+                    lobbyData.gameLogs.push(`${name} ist der Lobby beigetreten.`);
+                    await setDoc(lobbyRef, lobbyData);
+                }
+
+                lobbyId = code;
+                subscribeToLobby(code);
+            } catch (err) {
+                console.error("Failed to join lobby:", err);
+                window.showAlert("Fehler beim Beitreten", "Lobby-Verbindung fehlgeschlagen. Bitte versuche es erneut.");
             }
-
-            const name = getUsername();
-            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code);
-            const docSnap = await getDoc(lobbyRef);
-
-            if (!docSnap.exists()) {
-                alert("Lobby existiert nicht!");
-                playSynthSound('error');
-                return;
-            }
-
-            const lobbyData = docSnap.data();
-            if (lobbyData.status !== 'waiting') {
-                alert("Spiel läuft bereits oder ist beendet!");
-                playSynthSound('error');
-                return;
-            }
-
-            if (lobbyData.players.length >= 4) {
-                alert("Lobby ist voll!");
-                playSynthSound('error');
-                return;
-            }
-
-            if (!lobbyData.players.find(p => p.id === user.uid)) {
-                lobbyData.players.push({
-                    id: user.uid,
-                    name: name,
-                    cards: [],
-                    shieldActive: false,
-                    calledBruno: false,
-                    isReady: true
-                });
-                lobbyData.gameLogs.push(`${name} ist der Lobby beigetreten.`);
-                await setDoc(lobbyRef, lobbyData);
-            }
-
-            lobbyId = code;
-            subscribeToLobby(code);
         };
 
         // --- REALTIME SYNC ---
@@ -759,7 +853,6 @@
             dealerCenter.innerHTML = '';
 
             let delay = 0;
-            // Erzeuge 7 fliegende Karten nacheinander
             for (let i = 0; i < 7; i++) {
                 setTimeout(() => {
                     const card = document.createElement('div');
@@ -770,7 +863,6 @@
                     
                     playSynthSound('card-slide');
 
-                    // Animate card fly
                     setTimeout(() => {
                         const randomAngle = (Math.random() - 0.5) * 40;
                         const targetX = (Math.random() - 0.5) * window.innerWidth * 0.7;
@@ -783,7 +875,6 @@
                 delay += 250;
             }
 
-            // Cutscene beenden
             setTimeout(() => {
                 overlay.style.opacity = '0';
                 setTimeout(() => {
@@ -798,7 +889,7 @@
             if (!currentLobby) return;
 
             if (currentLobby.status === 'waiting') {
-                hasPlayedIntroAnim = false; // Reset Anim state for next games
+                hasPlayedIntroAnim = false;
                 document.getElementById('screen-waiting').classList.remove('hidden');
                 document.getElementById('screen-game').classList.add('hidden');
                 document.getElementById('game-over-modal').classList.add('hidden');
@@ -824,12 +915,9 @@
                     `;
                 });
             } else if (currentLobby.status === 'playing') {
-                
-                // Triggere die Cutscene, falls das Spiel gerade frisch gestartet wurde
                 if (!hasPlayedIntroAnim) {
                     hasPlayedIntroAnim = true;
                     playCardDealingAnimation(() => {
-                        // Eigentliches Spielfeld erst nach Animation aufdecken
                         document.getElementById('screen-waiting').classList.add('hidden');
                         document.getElementById('screen-game').classList.remove('hidden');
                         renderGameplayDetails();
@@ -872,7 +960,6 @@
 
         // Render-Details für das Gameplay
         function renderGameplayDetails() {
-            // Update logs
             const logPane = document.getElementById('log-pane');
             logPane.innerHTML = '';
             currentLobby.gameLogs.slice(-6).forEach(log => {
@@ -880,7 +967,6 @@
             });
             logPane.scrollTop = logPane.scrollHeight;
 
-            // Update chat messages
             const chatMsgs = document.getElementById('chat-messages');
             chatMsgs.innerHTML = '';
             const messages = currentLobby.chat || [];
@@ -889,7 +975,7 @@
             } else {
                 messages.forEach(msg => {
                     chatMsgs.innerHTML += `
-                        <div class="leading-relaxed">
+                        <div class="leading-relaxed text-left">
                             <span class="font-bold text-amber-400">${msg.senderName}:</span>
                             <span class="text-white">${msg.text}</span>
                         </div>
@@ -902,7 +988,6 @@
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             const isMyTurn = activePlayer.id === user.uid;
 
-            // Turn Banner
             const banner = document.getElementById('turn-banner');
             if (isMyTurn) {
                 banner.innerHTML = "🔴 Du bist an der Reihe!";
@@ -912,7 +997,6 @@
                 banner.className = "px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-center transition-all bg-white/5 border border-white/10 text-stone-400";
             }
 
-            // Wunschfarben Banner
             const lastDiscard = currentLobby.discardPile[currentLobby.discardPile.length - 1];
             const colorBanner = document.getElementById('active-color-banner');
             const colorName = document.getElementById('active-color-name');
@@ -924,7 +1008,6 @@
                 colorBanner.classList.add('hidden');
             }
 
-            // Eigene Handkarten rendern
             const handContainer = document.getElementById('player-hand');
             handContainer.innerHTML = '';
             if (me) {
@@ -951,7 +1034,6 @@
                 }
             }
 
-            // Ablagestapel & Nachziehkarten
             const discardContainer = document.getElementById('discard-pile');
             if (currentLobby.discardPile.length > 0) {
                 discardContainer.innerHTML = getCardHTML(lastDiscard);
@@ -974,15 +1056,12 @@
                 `;
             }
 
-            // GEGNER RENDERN (Flaches, klares Layout)
             const opponents = currentLobby.players.filter(p => p.id !== user.uid);
             
-            // Boxen leeren
             document.getElementById('player-left-box').style.display = 'none';
             document.getElementById('player-top-box').style.display = 'none';
             document.getElementById('player-right-box').style.display = 'none';
 
-            // Zuteilen
             if (opponents.length >= 1) {
                 renderOpponentBox('left', opponents[0]);
             }
@@ -993,12 +1072,10 @@
                 renderOpponentBox('right', opponents[2]);
             }
 
-            // Richtung
             const dirInd = document.getElementById('dir-indicator');
             dirInd.innerHTML = currentLobby.playDirection === 1 ? '➡️' : '⬅️';
         }
 
-        // Hilfsfunktion zum Rendern der strukturierten Gegnerboxen
         function renderOpponentBox(position, opponent) {
             const box = document.getElementById(`player-${position}-box`);
             const nameEl = document.getElementById(`name-${position}`);
@@ -1015,7 +1092,6 @@
                 box.className = "bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300";
             }
 
-            // BrUNO Warnung
             if (opponent.cards.length === 1) {
                 box.classList.add('border-rose-600', 'bg-rose-950/40');
             }
@@ -1147,13 +1223,14 @@
                 });
             }
 
-            // Shuffle
             return shuffle(newDeck);
         }
 
         // --- HOST STARTET DAS SPIEL ---
         window.startGame = async function() {
             if (!currentLobby || currentLobby.hostId !== user.uid) return;
+
+            await ensureAuth();
 
             let finalDeck = createDeck();
             
@@ -1202,6 +1279,8 @@
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             if (activePlayer.id !== user.uid) return;
 
+            await ensureAuth();
+
             const me = currentLobby.players.find(p => p.id === user.uid);
             const card = me.cards[idx];
 
@@ -1210,17 +1289,14 @@
                 return;
             }
 
-            // Aus Hand entfernen
             me.cards.splice(idx, 1);
 
-            // Spezialkarten-Handling für die Solidaritäts-Karte (💖)
             if (card.value === '💖') {
                 isSolidarityPlay = true;
                 showSolidarityTargets();
                 return;
             }
 
-            // Standard Wildcard-Handling
             if (card.isWild) {
                 isWaitingForColorSelection = true;
                 pendingWildCardIdx = idx;
@@ -1259,6 +1335,8 @@
         window.selectSolidarityPartner = async function(partnerId) {
             document.getElementById('solidarity-modal').classList.add('hidden');
             
+            await ensureAuth();
+
             const me = currentLobby.players.find(p => p.id === user.uid);
             const partner = currentLobby.players.find(p => p.id === partnerId);
             const logs = [...currentLobby.gameLogs];
@@ -1288,6 +1366,8 @@
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             const logs = [...currentLobby.gameLogs];
             logs.push(`${activePlayer.name} legt ${getColorEmoji(card.color)} ${card.color} ${card.value}.`);
+
+            await ensureAuth();
 
             let winners = [...currentLobby.winners];
             let checkMe = currentLobby.players.find(p => p.id === user.uid);
@@ -1331,6 +1411,8 @@
             isWaitingForColorSelection = false;
             document.getElementById('color-choice-modal').classList.add('hidden');
 
+            await ensureAuth();
+
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             const me = currentLobby.players.find(p => p.id === user.uid);
             let accDraws = currentLobby.accumulatedDraws;
@@ -1371,6 +1453,8 @@
         window.handleDrawClick = async function() {
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             if (activePlayer.id !== user.uid) return;
+
+            await ensureAuth();
 
             const me = currentLobby.players.find(p => p.id === user.uid);
             const logs = [...currentLobby.gameLogs];
@@ -1437,13 +1521,12 @@
             if (drawnCards.length > 0) {
                 let playCardNow = null;
                 if (foundPlayable) {
-                    playCardNow = drawnCards.pop(); // Die spielbare Karte wird abgezogen, um sie direkt zu legen
+                    playCardNow = drawnCards.pop();
                     logs.push(`🎴 Solange gezogen, bis spielbare Karte kam (+${drawnCards.length + 1} Karten).`);
                 } else {
                     logs.push(`🎴 Keine spielbare Karte im ganzen Stapel gefunden! (+${drawnCards.length} Karten).`);
                 }
 
-                // Gezogene Nicht-Spielfähige auf die Hand nehmen
                 me.cards.push(...drawnCards);
 
                 if (playCardNow) {
@@ -1452,7 +1535,6 @@
                     currentLobby.deck = tempDeck;
                     currentLobby.discardPile = tempDiscard;
 
-                    // Wildcards & Solidarität abfangen vor Einreichung
                     if (playCardNow.value === '💖') {
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId), {
                             players: currentLobby.players,
@@ -1513,7 +1595,6 @@
 
                     advanceTurnAndSubmit(logs, playDir, accDraws, skipNext, playCardNow.color, playCardNow.value, winners);
                 } else {
-                    // Keine spielbare Karte gezogen
                     const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
                     await updateDoc(lobbyRef, {
                         deck: tempDeck,
