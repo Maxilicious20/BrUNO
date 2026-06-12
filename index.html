@@ -520,7 +520,7 @@
         if (!firebaseConfig.apiKey) {
             console.error("Firebase API Key is not configured.");
             window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte prüfe deinen Build oder dein Hosting-Setup und stelle sicher, dass der Firebase-Konfigurationswert `window.__firebase_config` gesetzt ist.\n\nBeispiel:\n<script>window.__firebase_config = { apiKey: 'YOUR_API_KEY', authDomain: 'YOUR_AUTH_DOMAIN', projectId: 'YOUR_PROJECT_ID', storageBucket: 'YOUR_STORAGE_BUCKET', messagingSenderId: 'YOUR_MESSAGING_SENDER_ID', appId: 'YOUR_APP_ID' };<\/script>");
-            return;
+            throw new Error("Firebase configuration missing");
         }
 
         const app = initializeApp(firebaseConfig);
