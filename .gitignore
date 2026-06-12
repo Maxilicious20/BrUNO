@@ -8,8 +8,7 @@ node_modules/
 package-lock.json
 yarn.lock
 
-# Build outputs
-output.css
+# Build outputs (keep output.css - needed for production)
 dist/
 build/
 
