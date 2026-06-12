@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrUNO - Das ultimative Online-Kartenspiel</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Caveat:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #0b0914;
+            background-image: 
+                radial-gradient(circle at 20% 30%, #1e133a 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, #0d2240 0%, transparent 40%);
+        }
+        
+        .font-marker {
+            font-family: 'Caveat', cursive;
+        }
+
+        /* Modernes, glänzendes UNO-Online Kartendesign mit Papp-Unterton */
+        .uno-card {
+            border-radius: 12px;
+            background: #181528;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.1);
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            border: 3px solid #312a4f;
+        }
+
+        /* Innerer farbiger Kreis */
+        .card-inner-oval {
+            position: absolute;
+            width: 140%;
+            height: 75%;
+            top: 12.5%;
+            left: -20%;
+            transform: rotate(-18deg);
+            border-radius: 50%;
+            opacity: 0.85;
+            mix-blend-mode: screen;
+            filter: blur(0.5px);
+        }
+
+        /* Hover-Effekt für spielbare Handkarten */
+        .playable-card:hover {
+            transform: translateY(-24px) scale(1.08) rotate(2deg);
+            box-shadow: 0 15px 30px rgba(168, 85, 247, 0.4), 0 0 15px rgba(255, 255, 255, 0.2);
+            z-index: 50;
+            cursor: pointer;
+        }
+
+        /* Sanfte Karten-Überlappung in der Hand */
+        .hand-overlap > div {
+            margin-left: -16px;
+        }
+        .hand-overlap > div:first-child {
+            margin-left: 0;
+        }
+
+        /* Kräftige, leuchtende Farben */
+        .bg-card-rot { background: linear-gradient(135deg, #ff3838, #b3002d); border-color: #ff5252; }
+        .bg-card-gruen { background: linear-gradient(135deg, #2ed573, #009432); border-color: #2ecc71; }
+        .bg-card-blau { background: linear-gradient(135deg, #1e90ff, #0652dd); border-color: #54a0ff; }
+        .bg-card-lila { background: linear-gradient(135deg, #9b59b6, #6f1e51); border-color: #be2edd; }
+        .bg-card-wild { background: linear-gradient(135deg, #2f3542, #1e2129); border-color: #747d8c; }
+
+        /* Textfarben */
+        .text-card-rot { color: #ff4757; }
+        .text-card-gruen { color: #2ed573; }
+        .text-card-blau { color: #1e90ff; }
+        .text-card-lila { color: #a4b0be; }
+        .text-card-wild { color: #ffffff; }
+
+        /* Regenbogen-Text für Solidaritäts- & Wildcard */
+        .rainbow-text {
+            background: linear-gradient(45deg, #ff4757, #2ed573, #1e90ff, #be2edd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        /* Pulsierender Indikator für aktiven Zug */
+        .active-turn-glow {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
+            border-color: #22c55e !important;
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+
+        /* --- CUTSCENE / DEALING ANIMATION --- */
+        #deal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(11, 9, 20, 0.9);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .flying-card {
+            position: absolute;
+            width: 70px;
+            height: 110px;
+            background: linear-gradient(135deg, #e4b483 0%, #cf9a67 100%);
+            border: 2px solid #8e6239;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 99px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 99px;
+        }
+    </style>
+</head>
+<body class="text-stone-100 min-h-screen flex flex-col justify-between overflow-x-hidden select-none">
+
+    <!-- Sound Controller -->
+    <div class="fixed top-4 right-4 z-50 flex gap-2">
+        <button id="btn-sound" onclick="toggleSound()" class="bg-white/10 hover:bg-white/20 text-white w-10 h-10 rounded-full border border-white/10 transition-all shadow-lg flex items-center justify-center backdrop-blur-md">
+            <span id="sound-icon" class="text-lg">🔊</span>
+        </button>
+    </div>
+
+    <!-- CARTE AUSTEIL CUTSCENE OVERLAY -->
+    <div id="deal-overlay" class="hidden">
+        <div class="text-center space-y-4">
+            <div class="text-3xl font-bold tracking-wider text-amber-400 font-marker animate-pulse">Karten werden ausgegeben... 📦</div>
+            <div class="relative w-32 h-32 mx-auto" id="dealer-center">
+                <!-- Cards will fly from here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- START & LOBBY INTERFACE -->
+    <div id="screen-lobby" class="flex-1 flex flex-col items-center justify-center p-6">
+        <div class="max-w-md w-full bg-white/5 border border-white/10 p-8 rounded-3xl shadow-2xl backdrop-blur-xl text-center">
+            <div class="inline-block transform rotate-[-2deg] mb-6">
+                <div class="bg-gradient-to-r from-red-500 via-amber-500 to-blue-500 px-8 py-3 rounded-2xl shadow-lg border border-white/20">
+                    <h1 class="text-5xl font-marker text-white tracking-wider font-extrabold drop-shadow-md">BrUNO 📦</h1>
+                </div>
+            </div>
+            
+            <p class="text-stone-300 text-sm mb-8">Das ultimative, moderne Multiplayer-Kartenspiel. Spiele live über einen Lobby-Code mit deinen Freunden in Echtzeit!</p>
+
+            <!-- Spielername Input -->
+            <div class="mb-6 text-left">
+                <label class="block text-xs uppercase tracking-wider text-stone-400 mb-2 font-semibold">Dein Spielername</label>
+                <input id="input-username" type="text" placeholder="z.B. KartonKlaus" maxlength="12" class="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-xl focus:outline-none focus:border-amber-500 text-white text-center font-semibold tracking-wide transition-colors">
+            </div>
+
+            <!-- Action Tabs -->
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <button onclick="switchTab('create')" id="tab-create" class="py-3 px-4 rounded-xl font-semibold border-2 border-amber-500 bg-amber-500/10 text-amber-400 transition-all">
+                    Lobby erstellen
+                </button>
+                <button onclick="switchTab('join')" id="tab-join" class="py-3 px-4 rounded-xl font-semibold border border-white/10 bg-transparent text-stone-400 hover:text-white transition-all">
+                    Beitreten
+                </button>
+            </div>
+
+            <!-- Create Form -->
+            <div id="form-create" class="space-y-4">
+                <button onclick="createLobby()" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-amber-500/20">
+                    Lobby eröffnen 🔑
+                </button>
+            </div>
+
+            <!-- Join Form -->
+            <div id="form-join" class="space-y-4 hidden">
+                <input id="input-lobby-code" type="text" placeholder="4-STELLIGER CODE" maxlength="4" class="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-xl text-center text-xl font-bold tracking-widest uppercase focus:outline-none focus:border-amber-500">
+                <button onclick="joinLobby()" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-500/20">
+                    Spiel beitreten 🚀
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WAITING ROOM -->
+    <div id="screen-waiting" class="flex-1 flex flex-col items-center justify-center p-6 hidden">
+        <div class="max-w-md w-full bg-white/5 border border-white/10 p-8 rounded-3xl shadow-2xl backdrop-blur-xl text-center">
+            <span class="text-xs uppercase tracking-widest text-purple-400 font-bold">Deine Lobby</span>
+            <div id="display-lobby-code" class="text-5xl font-extrabold tracking-widest text-white my-3 select-all cursor-pointer hover:scale-105 transition-transform" title="Klicken zum Kopieren">----</div>
+            <p class="text-xs text-stone-400 mb-8">Teile diesen Code mit deinen Mitspielern!</p>
+
+            <div class="bg-black/30 border border-white/5 rounded-2xl p-4 mb-6 text-left">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 border-b border-white/5 pb-2">Spieler in der Lobby (<span id="player-count">0</span>/4)</h3>
+                <div id="lobby-players-list" class="space-y-2.5">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+
+            <div id="host-actions" class="hidden">
+                <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-stone-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-emerald-500/10">
+                    Spiel jetzt starten 🎮
+                </button>
+            </div>
+            <div id="client-actions" class="text-stone-400 text-sm animate-pulse">
+                Warte darauf, dass der Host das Spiel startet... ⌛
+            </div>
+        </div>
+    </div>
+
+    <!-- SPIELFELD (UNO-Online cleanes Interface) -->
+    <div id="screen-game" class="flex-1 flex flex-col justify-between p-4 max-w-7xl mx-auto w-full relative hidden">
+        
+        <!-- TOP: GEGNER OBEN -->
+        <div class="flex justify-center w-full mb-2">
+            <div id="player-top-box" class="bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">👤</span>
+                    <span class="text-sm font-bold truncate max-w-[100px]" id="name-top">Niemand</span>
+                </div>
+                <div class="flex items-center gap-2 mt-1.5 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                    <span class="text-xs text-amber-400 font-bold uppercase tracking-wider">Karten</span>
+                    <span id="count-top" class="text-sm font-black">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER BEREICH (Gegner Links, Stapel Mitte, Gegner Rechts) -->
+        <div class="flex-1 grid grid-cols-1 md:grid-cols-5 items-center justify-between gap-6 my-4 w-full">
+            
+            <!-- LINKS: GEGNER LINKS -->
+            <div class="flex justify-center md:justify-start">
+                <div id="player-left-box" class="bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">👤</span>
+                        <span class="text-sm font-bold truncate max-w-[100px]" id="name-left">Niemand</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1.5 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                        <span class="text-xs text-amber-400 font-bold uppercase tracking-wider">Karten</span>
+                        <span id="count-left" class="text-sm font-black">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MITTE: DIE GLÄNZENDE ARENA -->
+            <div class="md:col-span-3 flex flex-col items-center justify-center gap-4 bg-white/[0.02] border border-white/5 p-6 rounded-3xl relative">
+                
+                <!-- Spielrichtung -->
+                <div class="absolute -top-3 bg-amber-500/20 text-amber-400 px-4 py-0.5 rounded-full border border-amber-500/30 text-xs font-bold tracking-widest flex items-center gap-1">
+                    Richtung: <span id="dir-indicator">➡️</span>
+                </div>
+
+                <!-- Die beiden Stapel -->
+                <div class="flex items-center gap-8 sm:gap-12">
+                    <!-- ZIEHSTAPEL -->
+                    <div class="flex flex-col items-center">
+                        <button id="draw-pile" onclick="handleDrawClick()" class="uno-card w-22 h-32 sm:w-26 sm:h-38 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 group bg-gradient-to-br from-indigo-900 to-purple-950 border-purple-500">
+                            <div class="absolute inset-1.5 border border-dashed border-purple-400/40 rounded-lg flex flex-col items-center justify-center">
+                                <span class="text-xl sm:text-2xl font-marker text-purple-300 group-hover:scale-110 transition-transform font-bold">BrUNO</span>
+                                <span class="text-[8px] text-purple-400 mt-1 font-bold tracking-widest">ZIEHEN</span>
+                            </div>
+                        </button>
+                        <span class="text-[10px] text-stone-500 mt-2 uppercase tracking-wider font-bold" id="deck-count">Rest: -</span>
+                    </div>
+
+                    <!-- ABLAGESTAPEL -->
+                    <div class="flex flex-col items-center">
+                        <div id="discard-pile" class="w-22 h-32 sm:w-26 sm:h-38 transition-all duration-300">
+                            <!-- Rendered Card -->
+                        </div>
+                        <span class="text-[10px] text-stone-500 mt-2 uppercase tracking-wider font-bold">Ablage</span>
+                    </div>
+                </div>
+
+                <!-- TABBED LOG & MINI CHAT BOX -->
+                <div class="w-full max-w-sm bg-black/40 border border-white/5 rounded-2xl flex flex-col overflow-hidden">
+                    <div class="flex border-b border-white/5 text-center text-xs">
+                        <button onclick="switchLogTab('log')" id="tab-log-btn" class="flex-1 py-2 font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-500 transition-all">Spielverlauf</button>
+                        <button onclick="switchLogTab('chat')" id="tab-chat-btn" class="flex-1 py-2 font-bold uppercase tracking-wider text-stone-400 transition-all">Chat 💬</button>
+                    </div>
+
+                    <!-- Log Pane -->
+                    <div id="log-pane" class="p-3 h-24 overflow-y-auto custom-scrollbar space-y-1 text-stone-400 font-sans text-xs">
+                        <!-- Dynamic Logs -->
+                    </div>
+
+                    <!-- Chat Pane -->
+                    <div id="chat-pane" class="p-3 h-24 flex flex-col hidden">
+                        <div id="chat-messages" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 text-stone-300 font-sans text-[11px] mb-2">
+                            <!-- Dynamic Messages -->
+                        </div>
+                        <div class="flex gap-2">
+                            <input id="chat-input" onkeydown="handleChatKey(event)" type="text" placeholder="Nachricht schreiben..." class="flex-1 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl text-xs focus:outline-none focus:border-amber-500 text-white">
+                            <button onclick="sendChatMessage()" class="bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-colors">Senden</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RECHTS: GEGNER RECHTS -->
+            <div class="flex justify-center md:justify-end">
+                <div id="player-right-box" class="bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">👤</span>
+                        <span class="text-sm font-bold truncate max-w-[100px]" id="name-right">Niemand</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1.5 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                        <span class="text-xs text-amber-400 font-bold uppercase tracking-wider">Karten</span>
+                        <span id="count-right" class="text-sm font-black">-</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- UNTEN: SPIELER SELBST (Mensch) -->
+        <div class="w-full flex flex-col items-center gap-3 mt-4">
+            
+            <!-- Turn Indication Banner -->
+            <div id="turn-banner" class="px-6 py-1.5 rounded-full text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all bg-white/5 border border-white/10">
+                Warte auf Spielstart...
+            </div>
+
+            <!-- Active Color Banner -->
+            <div id="active-color-banner" class="hidden px-5 py-1.5 rounded-full border border-white/10 text-xs font-bold uppercase tracking-widest bg-black/40">
+                Spielfarbe: <span id="active-color-name">-</span>
+            </div>
+
+            <!-- CONTROLS (Passen entfernt, BrUNO Knopf optimiert) -->
+            <div class="flex gap-3 justify-center w-full max-w-md">
+                <button id="btn-uno" onclick="triggerBrunoCall()" class="w-full bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-stone-950 font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm sm:text-base">
+                    📢 "BrUNO!" rufen
+                </button>
+            </div>
+
+            <!-- EIGENE HAND (Fächernd ausgelegt) -->
+            <div class="w-full">
+                <div class="flex justify-between items-center px-4 mb-2">
+                    <h2 class="text-xs sm:text-sm font-bold text-stone-300 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Deine Handkarten
+                    </h2>
+                    <div id="player-shield-indicator" class="hidden bg-blue-500/20 border border-blue-500 text-blue-300 text-xs px-3 py-0.5 rounded-full items-center gap-1">
+                        🛡️ Schutzschild aktiv!
+                    </div>
+                </div>
+
+                <!-- Modern fächerndes Hand-Gitter -->
+                <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-5 min-h-[150px] flex items-center justify-center backdrop-blur-md overflow-x-auto">
+                    <div id="player-hand" class="flex hand-overlap justify-center max-w-full px-4">
+                        <!-- Handkarten werden hier dynamisch gerendert -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODALS -->
+
+    <!-- SOLIDARITÄTS-TARGETS -->
+    <div id="solidarity-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-stone-900 border border-white/10 max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl">
+            <h2 class="text-xl font-bold text-white mb-2">💖 Solidarität zeigen!</h2>
+            <p class="text-stone-400 text-xs mb-6">Wähle einen Partner aus. Ihr beide dürft jeweils zwei Karten abwerfen!</p>
+            <div id="solidarity-targets" class="space-y-3">
+                <!-- Spieler Buttons -->
+            </div>
+        </div>
+    </div>
+
+    <!-- FARBWAHL -->
+    <div id="color-choice-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-stone-900 border border-white/10 max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl">
+            <h2 class="text-xl font-bold text-white mb-6">Wähle eine neue Spielfarbe! 🎨</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="selectColor('Rot')" class="h-16 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                    Rot 🔴
+                </button>
+                <button onclick="selectColor('Grün')" class="h-16 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                    Grün 🟢
+                </button>
+                <button onclick="selectColor('Blau')" class="h-16 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                    Blau 🔵
+                </button>
+                <button onclick="selectColor('Lila')" class="h-16 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-base transition-transform active:scale-95 shadow-md">
+                    Lila 🟣
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SPIELENDE -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-stone-900 border border-white/10 max-w-md w-full rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+            <h2 id="game-over-title" class="text-3xl font-bold text-white mb-4">🏆 SPIEL BEENDET!</h2>
+            <p id="game-over-message" class="text-stone-300 text-sm mb-6">Spiel beendet</p>
+
+            <div class="bg-black/30 rounded-2xl p-4 mb-6 border border-white/5 text-left space-y-2 text-sm text-stone-400">
+                <div class="font-bold text-stone-200 border-b border-white/5 pb-2 mb-2">🏆 Platzierungen:</div>
+                <div id="leaderboard-list" class="space-y-1">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+
+            <button onclick="backToLobby()" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 py-3 rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-lg">
+                Zurück zur Lobby 🏠
+            </button>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-black/40 text-stone-600 text-center py-3 text-[10px] sm:text-xs border-t border-white/5 backdrop-blur-md">
+        BrUNO Online • Modernes Web-Multiplayer Kartenspiel :3
+    </footer>
+
+    <!-- FIREBASE & GAME LOGIC SCRIPTS -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Setup (MANDATORY setup)
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'bruno-lobby-game';
+
+        // --- GLOBAL GAME STATE ---
+        let user = null;
+        let lobbyId = "";
+        let currentLobby = null;
+        let isWaitingForColorSelection = false;
+        let isSolidarityPlay = false;
+        let hasPlayedIntroAnim = false;
+
+        // --- SOUNDENGINE (Synthesizer) ---
+        let soundEnabled = true;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynthSound(type) {
+            if (!soundEnabled) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            if (type === 'card-slide') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'card-play') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'special') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.linearRampToValueAtTime(880, now + 0.2);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'win') {
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, idx) => {
+                    const oscNote = audioCtx.createOscillator();
+                    const gainNote = audioCtx.createGain();
+                    oscNote.type = 'triangle';
+                    oscNote.frequency.value = freq;
+                    oscNote.connect(gainNote);
+                    gainNote.connect(audioCtx.destination);
+                    const noteTime = now + (idx * 0.12);
+                    gainNote.gain.setValueAtTime(0, now);
+                    gainNote.gain.linearRampToValueAtTime(0.12, noteTime);
+                    gainNote.gain.exponentialRampToValueAtTime(0.01, noteTime + 0.3);
+                    oscNote.start(noteTime);
+                    oscNote.stop(noteTime + 0.4);
+                });
+            } else if (type === 'error') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(120, now);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+        }
+
+        // --- HELPER FOR SHUFFLE ---
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // --- AUTH SETUP (RULE 3) ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (currentUser) => {
+            if (currentUser) {
+                user = currentUser;
+            }
+        });
+
+        initAuth();
+
+        // --- NAVIGATION UND TAB-SWITCH ---
+        window.switchTab = function(type) {
+            const createBtn = document.getElementById('tab-create');
+            const joinBtn = document.getElementById('tab-join');
+            const createForm = document.getElementById('form-create');
+            const joinForm = document.getElementById('form-join');
+
+            if (type === 'create') {
+                createBtn.classList.add('border-amber-500', 'bg-amber-500/10', 'text-amber-400');
+                createBtn.classList.remove('border-white/10', 'bg-transparent', 'text-stone-400');
+                joinBtn.classList.remove('border-amber-500', 'bg-amber-500/10', 'text-amber-400');
+                joinBtn.classList.add('border-white/10', 'bg-transparent', 'text-stone-400');
+                createForm.classList.remove('hidden');
+                joinForm.classList.add('hidden');
+            } else {
+                joinBtn.classList.add('border-amber-500', 'bg-amber-500/10', 'text-amber-400');
+                joinBtn.classList.remove('border-white/10', 'bg-transparent', 'text-stone-400');
+                createBtn.classList.remove('border-amber-500', 'bg-amber-500/10', 'text-amber-400');
+                createBtn.classList.add('border-white/10', 'bg-transparent', 'text-stone-400');
+                joinForm.classList.remove('hidden');
+                createForm.classList.add('hidden');
+            }
+        };
+
+        window.toggleSound = function() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            icon.innerText = soundEnabled ? '🔊' : '🔇';
+        };
+
+        // --- CHAT TABS SWITCH ---
+        window.switchLogTab = function(type) {
+            const logBtn = document.getElementById('tab-log-btn');
+            const chatBtn = document.getElementById('tab-chat-btn');
+            const logPane = document.getElementById('log-pane');
+            const chatPane = document.getElementById('chat-pane');
+            
+            if (type === 'log') {
+                logBtn.className = "flex-1 py-2 font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-500 transition-all";
+                chatBtn.className = "flex-1 py-2 font-bold uppercase tracking-wider text-stone-400 transition-all";
+                logPane.classList.remove('hidden');
+                chatPane.classList.add('hidden');
+            } else {
+                chatBtn.className = "flex-1 py-2 font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-500 transition-all";
+                logBtn.className = "flex-1 py-2 font-bold uppercase tracking-wider text-stone-400 transition-all";
+                chatPane.classList.remove('hidden');
+                logPane.classList.add('hidden');
+                // Auto Scroll to bottom
+                const chatMsgs = document.getElementById('chat-messages');
+                chatMsgs.scrollTop = chatMsgs.scrollHeight;
+            }
+        };
+
+        window.handleChatKey = function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        };
+
+        window.sendChatMessage = async function() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text || !currentLobby) return;
+
+            const me = currentLobby.players.find(p => p.id === user.uid);
+            const senderName = me ? me.name : "Spieler";
+
+            const chat = currentLobby.chat || [];
+            chat.push({
+                id: Math.random().toString(36).substring(2, 9),
+                senderName: senderName,
+                text: text,
+                timestamp: Date.now()
+            });
+
+            if (chat.length > 30) chat.shift(); // Letzte 30 Nachrichten behalten
+
+            input.value = '';
+
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+            await updateDoc(lobbyRef, { chat: chat });
+            playSynthSound('card-slide');
+        };
+
+        function generateCode() {
+            const chars = "ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
+            let res = "";
+            for (let i = 0; i < 4; i++) {
+                res += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return res;
+        }
+
+        function getUsername() {
+            const raw = document.getElementById('input-username').value.trim();
+            return raw || "Spieler-" + Math.floor(1000 + Math.random() * 9000);
+        }
+
+        // --- LOBBY ERSTELLEN ---
+        window.createLobby = async function() {
+            if (!user) {
+                playSynthSound('error');
+                return;
+            }
+            const name = getUsername();
+            const code = generateCode();
+            lobbyId = code;
+
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+            const initialLobby = {
+                lobbyId: lobbyId,
+                hostId: user.uid,
+                status: 'waiting',
+                players: [{
+                    id: user.uid,
+                    name: name,
+                    cards: [],
+                    shieldActive: false,
+                    calledBruno: false,
+                    isReady: true
+                }],
+                deck: [],
+                discardPile: [],
+                activeColor: 'Rot',
+                activeValue: '7',
+                currentPlayerIndex: 0,
+                playDirection: 1,
+                accumulatedDraws: 0,
+                hasDrawnThisTurn: false,
+                winners: [],
+                chat: [],
+                gameLogs: ["Lobby wurde erfolgreich erstellt!"]
+            };
+
+            await setDoc(lobbyRef, initialLobby);
+            subscribeToLobby(lobbyId);
+        };
+
+        // --- LOBBY BEITRETEN ---
+        window.joinLobby = async function() {
+            if (!user) return;
+            const code = document.getElementById('input-lobby-code').value.trim().toUpperCase();
+            if (code.length !== 4) {
+                playSynthSound('error');
+                return;
+            }
+
+            const name = getUsername();
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code);
+            const docSnap = await getDoc(lobbyRef);
+
+            if (!docSnap.exists()) {
+                alert("Lobby existiert nicht!");
+                playSynthSound('error');
+                return;
+            }
+
+            const lobbyData = docSnap.data();
+            if (lobbyData.status !== 'waiting') {
+                alert("Spiel läuft bereits oder ist beendet!");
+                playSynthSound('error');
+                return;
+            }
+
+            if (lobbyData.players.length >= 4) {
+                alert("Lobby ist voll!");
+                playSynthSound('error');
+                return;
+            }
+
+            if (!lobbyData.players.find(p => p.id === user.uid)) {
+                lobbyData.players.push({
+                    id: user.uid,
+                    name: name,
+                    cards: [],
+                    shieldActive: false,
+                    calledBruno: false,
+                    isReady: true
+                });
+                lobbyData.gameLogs.push(`${name} ist der Lobby beigetreten.`);
+                await setDoc(lobbyRef, lobbyData);
+            }
+
+            lobbyId = code;
+            subscribeToLobby(code);
+        };
+
+        // --- REALTIME SYNC ---
+        let unsubscribeLobby = null;
+        function subscribeToLobby(code) {
+            if (unsubscribeLobby) unsubscribeLobby();
+
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code);
+            
+            unsubscribeLobby = onSnapshot(lobbyRef, (docSnap) => {
+                if (!docSnap.exists()) return;
+                currentLobby = docSnap.data();
+                renderLobbyState();
+            }, (error) => {
+                console.error("Lobby-Subscription Fehler:", error);
+            });
+
+            document.getElementById('screen-lobby').classList.add('hidden');
+            document.getElementById('screen-waiting').classList.remove('hidden');
+            document.getElementById('display-lobby-code').innerText = code;
+        }
+
+        // --- CARDS CUTSCENE ANIMATION TRIGGER ---
+        function playCardDealingAnimation(callback) {
+            const overlay = document.getElementById('deal-overlay');
+            overlay.classList.remove('hidden');
+            overlay.style.opacity = '1';
+            
+            const dealerCenter = document.getElementById('dealer-center');
+            dealerCenter.innerHTML = '';
+
+            let delay = 0;
+            // Erzeuge 7 fliegende Karten nacheinander
+            for (let i = 0; i < 7; i++) {
+                setTimeout(() => {
+                    const card = document.createElement('div');
+                    card.className = 'flying-card';
+                    card.style.top = '0px';
+                    card.style.left = '0px';
+                    dealerCenter.appendChild(card);
+                    
+                    playSynthSound('card-slide');
+
+                    // Animate card fly
+                    setTimeout(() => {
+                        const randomAngle = (Math.random() - 0.5) * 40;
+                        const targetX = (Math.random() - 0.5) * window.innerWidth * 0.7;
+                        const targetY = window.innerHeight * 0.4;
+                        card.style.transform = `translate(${targetX}px, ${targetY}px) rotate(${randomAngle}deg) scale(0.2)`;
+                        card.style.opacity = '0';
+                    }, 50);
+
+                }, delay);
+                delay += 250;
+            }
+
+            // Cutscene beenden
+            setTimeout(() => {
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    if (callback) callback();
+                }, 500);
+            }, 2500);
+        }
+
+        // --- RENDER GAME STATE (UNO ONLINE STYLE) ---
+        function renderLobbyState() {
+            if (!currentLobby) return;
+
+            if (currentLobby.status === 'waiting') {
+                hasPlayedIntroAnim = false; // Reset Anim state for next games
+                document.getElementById('screen-waiting').classList.remove('hidden');
+                document.getElementById('screen-game').classList.add('hidden');
+                document.getElementById('game-over-modal').classList.add('hidden');
+
+                if (currentLobby.hostId === user.uid) {
+                    document.getElementById('host-actions').classList.remove('hidden');
+                    document.getElementById('client-actions').classList.add('hidden');
+                } else {
+                    document.getElementById('host-actions').classList.add('hidden');
+                    document.getElementById('client-actions').classList.remove('hidden');
+                }
+
+                const list = document.getElementById('lobby-players-list');
+                list.innerHTML = '';
+                document.getElementById('player-count').innerText = currentLobby.players.length;
+                currentLobby.players.forEach(p => {
+                    const isHost = p.id === currentLobby.hostId;
+                    list.innerHTML += `
+                        <div class="flex justify-between items-center bg-white/5 px-4 py-2.5 rounded-xl border border-white/5">
+                            <span class="font-semibold text-stone-200">${p.name} ${isHost ? '👑' : ''}</span>
+                            <span class="text-xs text-stone-500 font-bold uppercase tracking-wider">${p.id === user.uid ? 'DU' : 'Bereit'}</span>
+                        </div>
+                    `;
+                });
+            } else if (currentLobby.status === 'playing') {
+                
+                // Triggere die Cutscene, falls das Spiel gerade frisch gestartet wurde
+                if (!hasPlayedIntroAnim) {
+                    hasPlayedIntroAnim = true;
+                    playCardDealingAnimation(() => {
+                        // Eigentliches Spielfeld erst nach Animation aufdecken
+                        document.getElementById('screen-waiting').classList.add('hidden');
+                        document.getElementById('screen-game').classList.remove('hidden');
+                        renderGameplayDetails();
+                    });
+                } else {
+                    document.getElementById('screen-waiting').classList.add('hidden');
+                    document.getElementById('screen-game').classList.remove('hidden');
+                    renderGameplayDetails();
+                }
+            } else if (currentLobby.status === 'ended') {
+                document.getElementById('screen-game').classList.add('hidden');
+                const modal = document.getElementById('game-over-modal');
+                const title = document.getElementById('game-over-title');
+                const msg = document.getElementById('game-over-message');
+                const list = document.getElementById('leaderboard-list');
+
+                const winner = currentLobby.winners[0];
+                if (winner && winner.id === user.uid) {
+                    title.innerText = "🏆 SIEG!";
+                    msg.innerText = "Klasse! Du hast das BrUNO-Match gewonnen und alle Karten abgelegt! 🎉";
+                    playSynthSound('win');
+                } else {
+                    title.innerText = "Spiel zu Ende!";
+                    msg.innerText = `Der Sieg geht an ${winner ? winner.name : 'jemanden'}. Nächstes Mal klappt es bestimmt!`;
+                }
+
+                list.innerHTML = '';
+                currentLobby.winners.forEach((w, idx) => {
+                    list.innerHTML += `
+                        <div class="flex justify-between items-center py-1">
+                            <span>${idx + 1}. ${w.name}</span>
+                            <span class="font-bold text-amber-500">Abgelegt!</span>
+                        </div>
+                    `;
+                });
+
+                modal.classList.remove('hidden');
+            }
+        }
+
+        // Render-Details für das Gameplay
+        function renderGameplayDetails() {
+            // Update logs
+            const logPane = document.getElementById('log-pane');
+            logPane.innerHTML = '';
+            currentLobby.gameLogs.slice(-6).forEach(log => {
+                logPane.innerHTML += `<div class="py-0.5 border-b border-white/5 truncate">${log}</div>`;
+            });
+            logPane.scrollTop = logPane.scrollHeight;
+
+            // Update chat messages
+            const chatMsgs = document.getElementById('chat-messages');
+            chatMsgs.innerHTML = '';
+            const messages = currentLobby.chat || [];
+            if (messages.length === 0) {
+                chatMsgs.innerHTML = `<div class="text-stone-500 italic text-center text-[10px] my-auto">Keine Nachrichten vorhanden.</div>`;
+            } else {
+                messages.forEach(msg => {
+                    chatMsgs.innerHTML += `
+                        <div class="leading-relaxed">
+                            <span class="font-bold text-amber-400">${msg.senderName}:</span>
+                            <span class="text-white">${msg.text}</span>
+                        </div>
+                    `;
+                });
+            }
+            chatMsgs.scrollTop = chatMsgs.scrollHeight;
+
+            const me = currentLobby.players.find(p => p.id === user.uid);
+            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            const isMyTurn = activePlayer.id === user.uid;
+
+            // Turn Banner
+            const banner = document.getElementById('turn-banner');
+            if (isMyTurn) {
+                banner.innerHTML = "🔴 Du bist an der Reihe!";
+                banner.className = "px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-center transition-all bg-emerald-500 text-stone-950 active-turn-glow";
+            } else {
+                banner.innerHTML = `Warten auf ${activePlayer.name}...`;
+                banner.className = "px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-center transition-all bg-white/5 border border-white/10 text-stone-400";
+            }
+
+            // Wunschfarben Banner
+            const lastDiscard = currentLobby.discardPile[currentLobby.discardPile.length - 1];
+            const colorBanner = document.getElementById('active-color-banner');
+            const colorName = document.getElementById('active-color-name');
+            if (currentLobby.activeColor !== lastDiscard.color) {
+                colorBanner.classList.remove('hidden');
+                colorBanner.className = `px-5 py-1.5 rounded-full border text-xs font-bold uppercase tracking-widest bg-black/40 ${getColorClass(currentLobby.activeColor)}`;
+                colorName.innerText = `${getColorEmoji(currentLobby.activeColor)} ${currentLobby.activeColor}`;
+            } else {
+                colorBanner.classList.add('hidden');
+            }
+
+            // Eigene Handkarten rendern
+            const handContainer = document.getElementById('player-hand');
+            handContainer.innerHTML = '';
+            if (me) {
+                me.cards.sort((a,b) => {
+                    if(a.color === b.color) return a.value.localeCompare(b.value);
+                    return a.color.localeCompare(b.color);
+                });
+
+                me.cards.forEach((card, idx) => {
+                    const isValid = isValidPlay(card);
+                    let cardHTML = getCardHTML(card, true, idx);
+                    if (!isValid && isMyTurn && !isWaitingForColorSelection) {
+                        cardHTML = cardHTML.replace('uno-card', 'uno-card opacity-30 saturate-50');
+                        cardHTML = cardHTML.replace('playable-card', '');
+                    }
+                    handContainer.innerHTML += cardHTML;
+                });
+
+                const shieldInd = document.getElementById('player-shield-indicator');
+                if (me.shieldActive) {
+                    shieldInd.classList.remove('hidden');
+                } else {
+                    shieldInd.classList.add('hidden');
+                }
+            }
+
+            // Ablagestapel & Nachziehkarten
+            const discardContainer = document.getElementById('discard-pile');
+            if (currentLobby.discardPile.length > 0) {
+                discardContainer.innerHTML = getCardHTML(lastDiscard);
+            }
+
+            const drawPile = document.getElementById('draw-pile');
+            document.getElementById('deck-count').innerText = `Rest: ${currentLobby.deck.length}`;
+            if (currentLobby.accumulatedDraws > 0) {
+                drawPile.innerHTML = `
+                    <div class="absolute inset-1.5 border border-dashed border-red-500 rounded-lg flex flex-col items-center justify-center bg-red-950/40">
+                        <span class="text-3xl font-marker text-red-500 animate-bounce">+${currentLobby.accumulatedDraws}</span>
+                    </div>
+                `;
+            } else {
+                drawPile.innerHTML = `
+                    <div class="absolute inset-1.5 border border-dashed border-purple-400/20 rounded-lg flex flex-col items-center justify-center">
+                        <span class="text-xl sm:text-2xl font-marker text-purple-300">BrUNO</span>
+                        <span class="text-[8px] text-purple-400 mt-1 font-bold tracking-widest">ZIEHEN</span>
+                    </div>
+                `;
+            }
+
+            // GEGNER RENDERN (Flaches, klares Layout)
+            const opponents = currentLobby.players.filter(p => p.id !== user.uid);
+            
+            // Boxen leeren
+            document.getElementById('player-left-box').style.display = 'none';
+            document.getElementById('player-top-box').style.display = 'none';
+            document.getElementById('player-right-box').style.display = 'none';
+
+            // Zuteilen
+            if (opponents.length >= 1) {
+                renderOpponentBox('left', opponents[0]);
+            }
+            if (opponents.length >= 2) {
+                renderOpponentBox('top', opponents[1]);
+            }
+            if (opponents.length >= 3) {
+                renderOpponentBox('right', opponents[2]);
+            }
+
+            // Richtung
+            const dirInd = document.getElementById('dir-indicator');
+            dirInd.innerHTML = currentLobby.playDirection === 1 ? '➡️' : '⬅️';
+        }
+
+        // Hilfsfunktion zum Rendern der strukturierten Gegnerboxen
+        function renderOpponentBox(position, opponent) {
+            const box = document.getElementById(`player-${position}-box`);
+            const nameEl = document.getElementById(`name-${position}`);
+            const countEl = document.getElementById(`count-${position}`);
+
+            box.style.display = 'flex';
+            nameEl.innerText = opponent.name;
+            countEl.innerText = opponent.cards.length;
+
+            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            if (activePlayer.id === opponent.id) {
+                box.className = "bg-emerald-500/15 border-2 border-emerald-500 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300 active-turn-glow";
+            } else {
+                box.className = "bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300";
+            }
+
+            // BrUNO Warnung
+            if (opponent.cards.length === 1) {
+                box.classList.add('border-rose-600', 'bg-rose-950/40');
+            }
+        }
+
+        // --- HELPER RENDERING ---
+        function getColorEmoji(color) {
+            if (color === 'Rot') return '🔴';
+            if (color === 'Grün') return '🟢';
+            if (color === 'Blau') return '🔵';
+            if (color === 'Lila') return '🟣';
+            return '🌈';
+        }
+
+        function getColorClass(color) {
+            if (color === 'Rot') return 'bg-card-rot';
+            if (color === 'Grün') return 'bg-card-gruen';
+            if (color === 'Blau') return 'bg-card-blau';
+            if (color === 'Lila') return 'bg-card-lila';
+            return 'bg-card-wild';
+        }
+
+        function getCardHTML(card, isInteractive = false, index = -1) {
+            const mColorClass = getColorClass(card.color);
+            let displayVal = card.value;
+            
+            if (card.value === '❌') displayVal = 'Aussetz.';
+            if (card.value === '🔄') displayVal = 'Wechs.';
+            if (card.value === '🛡️') displayVal = '🛡️ Schild';
+            if (card.value === '🤝') displayVal = '🤝 Tausch';
+            if (card.value === '💖') {
+                return `
+                <div onclick="playCard(${index})" class="uno-card playable-card w-20 h-32 sm:w-24 sm:h-36 rounded-2xl flex flex-col justify-between p-3 relative select-none bg-card-wild">
+                    <div class="card-inner-oval bg-card-rot opacity-30"></div>
+                    <div class="flex justify-between items-center text-xs font-bold solidarity-glow">
+                        <span>★</span>
+                        <span>💖</span>
+                    </div>
+                    <div class="text-center flex flex-col items-center justify-center my-auto z-10">
+                        <span class="text-xl sm:text-2xl font-marker font-extrabold tracking-tighter solidarity-glow leading-none">
+                            Solidarität
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center text-xs font-bold solidarity-glow rotate-180">
+                        <span>★</span>
+                        <span>💖</span>
+                    </div>
+                </div>
+                `;
+            }
+
+            let clickAttr = '';
+            let cursorStyle = 'cursor-default';
+            let hoverStyle = '';
+
+            if (isInteractive && index !== -1) {
+                clickAttr = `onclick="playCard(${index})"`;
+                cursorStyle = 'cursor-pointer';
+                hoverStyle = 'playable-card';
+            }
+
+            return `
+                <div ${clickAttr} class="uno-card ${hoverStyle} ${mColorClass} w-20 h-32 sm:w-24 sm:h-36 rounded-2xl flex flex-col justify-between p-3 relative select-none ${cursorStyle}">
+                    <div class="card-inner-oval bg-white/10"></div>
+                    <div class="flex justify-between items-center text-[10px] sm:text-xs font-bold text-white z-10">
+                        <span>${card.color !== 'Wild' ? card.color[0] : '★'}</span>
+                        <span>${card.value}</span>
+                    </div>
+                    
+                    <div class="text-center flex flex-col items-center justify-center my-auto z-10">
+                        <span class="text-2xl sm:text-3xl font-marker font-black tracking-tighter text-white drop-shadow">
+                            ${displayVal}
+                        </span>
+                    </div>
+
+                    <div class="flex justify-between items-center text-[10px] sm:text-xs font-bold text-white z-10 rotate-180">
+                        <span>${card.color !== 'Wild' ? card.color[0] : '★'}</span>
+                        <span>${card.value}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function isValidPlay(card) {
+            if (!currentLobby) return false;
+
+            if (currentLobby.accumulatedDraws > 0) {
+                if (card.value === '🛡️') return true;
+                if (currentLobby.accumulatedDraws % 3 === 0 && card.value === '🌈+3') return true;
+                if (card.value === '+1' || card.value === '+2') return true;
+                return false;
+            }
+
+            if (card.isWild) return true;
+            if (card.color === currentLobby.activeColor) return true;
+            if (card.value === currentLobby.activeValue) return true;
+
+            return false;
+        }
+
+        // --- DECK INITIALISIERUNG ---
+        function createDeck() {
+            const colors = ['Rot', 'Grün', 'Blau', 'Lila'];
+            const values = ['1', '2', '3', '4', '5', '6', '7', '❌', '🔄', '+1', '+2', '🛡️'];
+            const wilds = ['🌈', '🌈+3', '🤝', '💖'];
+            let newDeck = [];
+            
+            colors.forEach(color => {
+                for (let i = 0; i < 2; i++) {
+                    values.forEach(val => {
+                        newDeck.push({
+                            id: Math.random().toString(36).substring(2, 9),
+                            color: color,
+                            value: val,
+                            isWild: false
+                        });
+                    });
+                }
+            });
+
+            for (let i = 0; i < 4; i++) {
+                wilds.forEach(wild => {
+                    newDeck.push({
+                        id: Math.random().toString(36).substring(2, 9),
+                        color: 'Wild',
+                        value: wild,
+                        isWild: true
+                    });
+                });
+            }
+
+            // Shuffle
+            return shuffle(newDeck);
+        }
+
+        // --- HOST STARTET DAS SPIEL ---
+        window.startGame = async function() {
+            if (!currentLobby || currentLobby.hostId !== user.uid) return;
+
+            let finalDeck = createDeck();
+            
+            const updatedPlayers = currentLobby.players.map(p => {
+                const cards = [];
+                for (let i = 0; i < 7; i++) {
+                    cards.push(finalDeck.pop());
+                }
+                return {
+                    ...p,
+                    cards: cards,
+                    shieldActive: false,
+                    calledBruno: false
+                };
+            });
+
+            let firstCard = finalDeck.pop();
+            while (firstCard.isWild) {
+                finalDeck.unshift(firstCard);
+                firstCard = finalDeck.pop();
+            }
+
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+            await updateDoc(lobbyRef, {
+                status: 'playing',
+                deck: finalDeck,
+                players: updatedPlayers,
+                discardPile: [firstCard],
+                activeColor: firstCard.color,
+                activeValue: firstCard.value,
+                currentPlayerIndex: 0,
+                playDirection: 1,
+                accumulatedDraws: 0,
+                hasDrawnThisTurn: false,
+                winners: [],
+                chat: [],
+                gameLogs: ["Das Spiel wurde gestartet!", `Erste Karte ist ${getColorEmoji(firstCard.color)} ${firstCard.color} ${firstCard.value}.`]
+            });
+
+            playSynthSound('special');
+        };
+
+        // --- KARTE LEGEN ---
+        let pendingWildCardIdx = -1;
+        window.playCard = async function(idx) {
+            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            if (activePlayer.id !== user.uid) return;
+
+            const me = currentLobby.players.find(p => p.id === user.uid);
+            const card = me.cards[idx];
+
+            if (!isValidPlay(card)) {
+                playSynthSound('error');
+                return;
+            }
+
+            // Aus Hand entfernen
+            me.cards.splice(idx, 1);
+
+            // Spezialkarten-Handling für die Solidaritäts-Karte (💖)
+            if (card.value === '💖') {
+                isSolidarityPlay = true;
+                showSolidarityTargets();
+                return;
+            }
+
+            // Standard Wildcard-Handling
+            if (card.isWild) {
+                isWaitingForColorSelection = true;
+                pendingWildCardIdx = idx;
+                document.getElementById('color-choice-modal').classList.remove('hidden');
+                return;
+            }
+
+            await executeCardEffectAndSubmit(card);
+        };
+
+        // Solidaritäts-Partner-Auswahl anzeigen
+        function showSolidarityTargets() {
+            const container = document.getElementById('solidarity-targets');
+            container.innerHTML = '';
+            
+            const options = currentLobby.players.filter(p => p.id !== user.uid && p.cards.length > 0);
+            
+            if (options.length === 0) {
+                isSolidarityPlay = false;
+                isWaitingForColorSelection = true;
+                document.getElementById('color-choice-modal').classList.remove('hidden');
+                return;
+            }
+
+            options.forEach(p => {
+                container.innerHTML += `
+                    <button onclick="selectSolidarityPartner('${p.id}')" class="w-full py-3 px-4 rounded-2xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/15 transition-all text-sm sm:text-base">
+                        🤝 Mit ${p.name} verbünden (${p.cards.length} Handkarten)
+                    </button>
+                `;
+            });
+
+            document.getElementById('solidarity-modal').classList.remove('hidden');
+        }
+
+        window.selectSolidarityPartner = async function(partnerId) {
+            document.getElementById('solidarity-modal').classList.add('hidden');
+            
+            const me = currentLobby.players.find(p => p.id === user.uid);
+            const partner = currentLobby.players.find(p => p.id === partnerId);
+            const logs = [...currentLobby.gameLogs];
+
+            logs.push(`💖 <strong>Solidarität gespielt!</strong> ${me.name} verbündet sich mit ${partner.name}.`);
+
+            const myDiscarded = me.cards.splice(0, Math.min(2, me.cards.length));
+            const partnerDiscarded = partner.cards.splice(0, Math.min(2, partner.cards.length));
+
+            logs.push(`✨ Beide legen jeweils ${myDiscarded.length} bzw. ${partnerDiscarded.length} Karten ab!`);
+
+            isSolidarityPlay = false;
+            isWaitingForColorSelection = true;
+            
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+            await updateDoc(lobbyRef, {
+                players: currentLobby.players,
+                gameLogs: logs
+            });
+
+            document.getElementById('color-choice-modal').classList.remove('hidden');
+            playSynthSound('special');
+        };
+
+        // Spezialeffekte final anwenden
+        async function executeCardEffectAndSubmit(card) {
+            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            const logs = [...currentLobby.gameLogs];
+            logs.push(`${activePlayer.name} legt ${getColorEmoji(card.color)} ${card.color} ${card.value}.`);
+
+            let winners = [...currentLobby.winners];
+            let checkMe = currentLobby.players.find(p => p.id === user.uid);
+            if (checkMe.cards.length === 0) {
+                winners.push(checkMe);
+                logs.push(`🎉 ${checkMe.name} hat alle Karten abgelegt!`);
+            }
+
+            if (checkMe.cards.length === 1 && !checkMe.calledBruno) {
+                logs.push(`⚠️ ${checkMe.name} hat vergessen, BrUNO zu rufen! +2 Strafkarten.`);
+                drawCardsForPlayer(checkMe, 2);
+            }
+
+            let playDir = currentLobby.playDirection;
+            let accDraws = currentLobby.accumulatedDraws;
+            let skipNext = false;
+
+            if (card.value === '❌') {
+                skipNext = true;
+                logs.push(`❌ Nächster Spieler setzt aus!`);
+            } else if (card.value === '🔄') {
+                playDir *= -1;
+                logs.push(`🔄 Die Spielrichtung hat sich geändert.`);
+            } else if (card.value === '+1') {
+                accDraws += 1;
+            } else if (card.value === '+2') {
+                accDraws += 2;
+            } else if (card.value === '🛡️') {
+                checkMe.shieldActive = true;
+                logs.push(`🛡️ ${checkMe.name} hat ein Schutzschild aktiviert.`);
+            }
+
+            const topColor = card.color !== 'Wild' ? card.color : currentLobby.activeColor;
+            const topValue = card.value;
+
+            advanceTurnAndSubmit(logs, playDir, accDraws, skipNext, topColor, topValue, winners);
+        }
+
+        // --- FARBWAHL CONFIRM ---
+        window.selectColor = async function(color) {
+            isWaitingForColorSelection = false;
+            document.getElementById('color-choice-modal').classList.add('hidden');
+
+            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            const me = currentLobby.players.find(p => p.id === user.uid);
+            let accDraws = currentLobby.accumulatedDraws;
+            const logs = [...currentLobby.gameLogs];
+            
+            logs.push(`${activePlayer.name} wünscht sich die Farbe ${getColorEmoji(color)} ${color}!`);
+
+            if (currentLobby.activeValue === '🤝') {
+                let minPlayer = null;
+                let minCount = 999;
+                currentLobby.players.forEach(p => {
+                    if (p.id !== activePlayer.id && p.cards.length > 0 && p.cards.length < minCount) {
+                        minCount = p.cards.length;
+                        minPlayer = p;
+                    }
+                });
+                if (minPlayer) {
+                    logs.push(`🤝 Chaos-Handtausch zwischen ${activePlayer.name} und ${minPlayer.name}!`);
+                    const temp = [...activePlayer.cards];
+                    activePlayer.cards = [...minPlayer.cards];
+                    minPlayer.cards = temp;
+                }
+            } else if (currentLobby.activeValue === '🌈+3') {
+                accDraws += 3;
+            }
+
+            let winners = [...currentLobby.winners];
+            if (me.cards.length === 0 && !winners.find(w => w.id === me.id)) {
+                winners.push(me);
+                logs.push(`🎉 ${me.name} hat alle Karten abgelegt!`);
+            }
+
+            advanceTurnAndSubmit(logs, currentLobby.playDirection, accDraws, false, color, currentLobby.activeValue, winners);
+            playSynthSound('special');
+        };
+
+        // --- AUTOMATISIERTER ZIEH-MECHANISMUS (ZIEHEN BIS SPIELBAR) ---
+        window.handleDrawClick = async function() {
+            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            if (activePlayer.id !== user.uid) return;
+
+            const me = currentLobby.players.find(p => p.id === user.uid);
+            const logs = [...currentLobby.gameLogs];
+
+            // 1. Wenn eine Zieh-Strafe vorliegt
+            if (currentLobby.accumulatedDraws > 0) {
+                if (me.shieldActive) {
+                    me.shieldActive = false;
+                    logs.push(`🛡️ ${me.name} entkommt der Strafe dank des aktivierten Schutzschilds!`);
+                } else {
+                    const drawCount = currentLobby.accumulatedDraws;
+                    drawCardsForPlayer(me, drawCount);
+                    logs.push(`🎴 ${me.name} zieht ${drawCount} Strafkarten.`);
+                }
+                
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId), {
+                    players: currentLobby.players,
+                    accumulatedDraws: 0,
+                    gameLogs: logs,
+                    hasDrawnThisTurn: false
+                });
+                advanceTurnAndSubmit(logs, currentLobby.playDirection, 0, false, currentLobby.activeColor, currentLobby.activeValue, currentLobby.winners);
+                playSynthSound('card-slide');
+                return;
+            }
+
+            // 2. Normales Ziehen: Ziehe solange, bis eine spielbare Karte gezogen wird
+            let tempDeck = [...currentLobby.deck];
+            let tempDiscard = [...currentLobby.discardPile];
+            let drawnCards = [];
+            let foundPlayable = null;
+
+            function testIsValidPlay(card) {
+                if (card.isWild) return true;
+                if (card.color === currentLobby.activeColor) return true;
+                if (card.value === currentLobby.activeValue) return true;
+                return false;
+            }
+
+            let safetyCounter = 0;
+            while (!foundPlayable && safetyCounter < 100) {
+                safetyCounter++;
+                if (tempDeck.length === 0) {
+                    if (tempDiscard.length <= 1) {
+                        break;
+                    }
+                    const top = tempDiscard.pop();
+                    tempDeck = shuffle(tempDiscard);
+                    tempDiscard = [top];
+                    logs.push("📋 Der Nachziehstapel wurde neu gemischt.");
+                }
+
+                if (tempDeck.length > 0) {
+                    const card = tempDeck.pop();
+                    drawnCards.push(card);
+                    if (testIsValidPlay(card)) {
+                        foundPlayable = card;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            if (drawnCards.length > 0) {
+                let playCardNow = null;
+                if (foundPlayable) {
+                    playCardNow = drawnCards.pop(); // Die spielbare Karte wird abgezogen, um sie direkt zu legen
+                    logs.push(`🎴 Solange gezogen, bis spielbare Karte kam (+${drawnCards.length + 1} Karten).`);
+                } else {
+                    logs.push(`🎴 Keine spielbare Karte im ganzen Stapel gefunden! (+${drawnCards.length} Karten).`);
+                }
+
+                // Gezogene Nicht-Spielfähige auf die Hand nehmen
+                me.cards.push(...drawnCards);
+
+                if (playCardNow) {
+                    logs.push(`✨ Legt gezogene Karte ${getColorEmoji(playCardNow.color)} ${playCardNow.color} ${playCardNow.value} sofort.`);
+                    
+                    currentLobby.deck = tempDeck;
+                    currentLobby.discardPile = tempDiscard;
+
+                    // Wildcards & Solidarität abfangen vor Einreichung
+                    if (playCardNow.value === '💖') {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId), {
+                            players: currentLobby.players,
+                            deck: tempDeck,
+                            discardPile: tempDiscard,
+                            gameLogs: logs
+                        });
+                        isSolidarityPlay = true;
+                        showSolidarityTargets();
+                        return;
+                    }
+
+                    if (playCardNow.isWild) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId), {
+                            players: currentLobby.players,
+                            deck: tempDeck,
+                            discardPile: tempDiscard,
+                            gameLogs: logs,
+                            activeValue: playCardNow.value
+                        });
+                        isWaitingForColorSelection = true;
+                        document.getElementById('color-choice-modal').classList.remove('hidden');
+                        return;
+                    }
+
+                    let playDir = currentLobby.playDirection;
+                    let accDraws = currentLobby.accumulatedDraws;
+                    let skipNext = false;
+
+                    if (playCardNow.value === '❌') {
+                        skipNext = true;
+                        logs.push(`❌ Nächster Spieler setzt aus!`);
+                    } else if (playCardNow.value === '🔄') {
+                        playDir *= -1;
+                        logs.push(`🔄 Die Spielrichtung hat sich geändert.`);
+                    } else if (playCardNow.value === '+1') {
+                        accDraws += 1;
+                    } else if (playCardNow.value === '+2') {
+                        accDraws += 2;
+                    } else if (playCardNow.value === '🛡️') {
+                        me.shieldActive = true;
+                        logs.push(`🛡️ ${me.name} hat ein Schutzschild aktiviert.`);
+                    }
+
+                    let winners = [...currentLobby.winners];
+                    if (me.cards.length === 0) {
+                        winners.push(me);
+                    }
+
+                    tempDiscard.push(playCardNow);
+
+                    const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+                    await updateDoc(lobbyRef, {
+                        deck: tempDeck,
+                        discardPile: tempDiscard,
+                        players: currentLobby.players
+                    });
+
+                    advanceTurnAndSubmit(logs, playDir, accDraws, skipNext, playCardNow.color, playCardNow.value, winners);
+                } else {
+                    // Keine spielbare Karte gezogen
+                    const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+                    await updateDoc(lobbyRef, {
+                        deck: tempDeck,
+                        discardPile: tempDiscard,
+                        players: currentLobby.players,
+                        gameLogs: logs
+                    });
+                    advanceTurnAndSubmit(logs, currentLobby.playDirection, currentLobby.accumulatedDraws, false, currentLobby.activeColor, currentLobby.activeValue, currentLobby.winners);
+                }
+            }
+            playSynthSound('card-slide');
+        };
+
+        // --- ZUGWECHSEL ENGINE ---
+        async function advanceTurnAndSubmit(logs, direction, accDraws, skipNext, activeColor, activeValue, winners) {
+            let nextIndex = currentLobby.currentPlayerIndex;
+            let step = direction * (skipNext ? 2 : 1);
+            
+            nextIndex = (nextIndex + step + currentLobby.players.length) % currentLobby.players.length;
+
+            let iter = 0;
+            while (currentLobby.players[nextIndex].cards.length === 0 && iter < 4) {
+                nextIndex = (nextIndex + direction + currentLobby.players.length) % currentLobby.players.length;
+                iter++;
+            }
+
+            let status = 'playing';
+            const remainingPlayers = currentLobby.players.filter(p => p.cards.length > 0).length;
+            if (remainingPlayers <= 1 || winners.length >= currentLobby.players.length - 1) {
+                status = 'ended';
+            }
+
+            const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
+            await updateDoc(lobbyRef, {
+                players: currentLobby.players,
+                currentPlayerIndex: nextIndex,
+                playDirection: direction,
+                accumulatedDraws: accDraws,
+                hasDrawnThisTurn: false,
+                activeColor: activeColor,
+                activeValue: activeValue,
+                gameLogs: logs,
+                winners: winners,
+                status: status
+            });
+        }
+
+        function drawCardsForPlayer(player, count) {
+            for (let i = 0; i < count; i++) {
+                if (currentLobby.deck.length === 0) {
+                    const top = currentLobby.discardPile.pop();
+                    currentLobby.deck = currentLobby.discardPile;
+                    currentLobby.discardPile = [top];
+                }
+                if (currentLobby.deck.length > 0) {
+                    player.cards.push(currentLobby.deck.pop());
+                }
+            }
+        }
+
+        // --- BACK TO LOBBY ---
+        window.backToLobby = function() {
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-waiting').classList.add('hidden');
+            document.getElementById('screen-lobby').classList.remove('hidden');
+            if (unsubscribeLobby) unsubscribeLobby();
+        };
+
+        window.openRulesModal = function() {
+            document.getElementById('rules-modal').classList.remove('hidden');
+        };
+        window.closeRulesModal = function() {
+            document.getElementById('rules-modal').classList.add('hidden');
+        };
+    </script>
+</body>
+</html>
