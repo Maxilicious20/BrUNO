@@ -575,9 +575,10 @@
 
         // Helper DB functions using Supabase
         async function dbCreateLobby(lobbyObj) {
-            const { data, error } = await supabase.from('lobbies').insert([lobbyObj]).select().single();
+            const { data, error } = await supabase.from('lobbies').insert([lobbyObj]);
             if (error) throw error;
-            return data;
+            // fetch fresh row to avoid relying on server-returned columns
+            return await dbGetLobby(lobbyObj.lobbyId);
         }
 
         async function dbGetLobby(code) {
@@ -587,9 +588,9 @@
         }
 
         async function dbUpdateLobby(code, patch) {
-            const { data, error } = await supabase.from('lobbies').update(patch).eq('lobbyId', code).select().single();
+            const { data, error } = await supabase.from('lobbies').update(patch).eq('lobbyId', code);
             if (error) throw error;
-            return data;
+            return await dbGetLobby(code);
         }
 
         function subscribeToLobbyRealtime(code) {
@@ -709,9 +710,9 @@
 
         async function setDoc(ref, data) {
             // Upsert by lobbyId
-            const { data: res, error } = await supabase.from('lobbies').upsert([data]).select().single();
+            const { data: res, error } = await supabase.from('lobbies').upsert([data]);
             if (error) throw error;
-            return res;
+            return await dbGetLobby(data.lobbyId);
         }
 
         async function getDoc(ref) {
@@ -724,9 +725,9 @@
         }
 
         async function updateDoc(ref, patch) {
-            const { data, error } = await supabase.from('lobbies').update(patch).eq('lobbyId', ref.id).select().single();
+            const { data, error } = await supabase.from('lobbies').update(patch).eq('lobbyId', ref.id);
             if (error) throw error;
-            return data;
+            return await dbGetLobby(ref.id);
         }
 
         function onSnapshot(ref, onNext, onError) {
