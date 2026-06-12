@@ -574,6 +574,40 @@
         ensureUser().catch(e => console.warn('ensureUser failed', e));
 
         // Helper DB functions using Supabase
+        function normalizeLobbyRow(row) {
+            if (!row) return row;
+            const normalized = { ...row };
+
+            if ('hostid' in row && !('hostId' in row)) normalized.hostId = row.hostid;
+            if ('lobbyid' in row && !('lobbyId' in row)) normalized.lobbyId = row.lobbyid;
+            if ('discardpile' in row && !('discardPile' in row)) normalized.discardPile = row.discardpile;
+            if ('activecolor' in row && !('activeColor' in row)) normalized.activeColor = row.activecolor;
+            if ('activevalue' in row && !('activeValue' in row)) normalized.activeValue = row.activevalue;
+            if ('currentplayerindex' in row && !('currentPlayerIndex' in row)) normalized.currentPlayerIndex = row.currentplayerindex;
+            if ('playdirection' in row && !('playDirection' in row)) normalized.playDirection = row.playdirection;
+            if ('accumulateddraws' in row && !('accumulatedDraws' in row)) normalized.accumulatedDraws = row.accumulateddraws;
+            if ('hasdrawnthisturn' in row && !('hasDrawnThisTurn' in row)) normalized.hasDrawnThisTurn = row.hasdrawnthisturn;
+            if ('gamelogs' in row && !('gameLogs' in row)) normalized.gameLogs = row.gamelogs;
+
+            const parseJson = field => {
+                if (typeof normalized[field] === 'string') {
+                    try {
+                        normalized[field] = JSON.parse(normalized[field]);
+                    } catch (e) {
+                        console.warn(`Unable to parse ${field}`, e);
+                    }
+                }
+            };
+            ['players', 'deck', 'discardPile', 'winners', 'chat', 'gameLogs'].forEach(parseJson);
+
+            if (!Array.isArray(normalized.players)) normalized.players = [];
+            if (!Array.isArray(normalized.winners)) normalized.winners = [];
+            if (!Array.isArray(normalized.chat)) normalized.chat = [];
+            if (!Array.isArray(normalized.gameLogs)) normalized.gameLogs = [];
+
+            return normalized;
+        }
+
         async function dbCreateLobby(lobbyObj) {
             const { error } = await supabase.from('lobbies').insert([lobbyObj], { returning: 'minimal' });
             if (error) throw error;
@@ -584,7 +618,7 @@
         async function dbGetLobby(code) {
             const { data, error } = await supabase.from('lobbies').select('*').eq('lobbyId', code).single();
             if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows? adjust per runtime
-            return data;
+            return normalizeLobbyRow(data);
         }
 
         async function dbUpdateLobby(code, patch) {
@@ -615,7 +649,7 @@
             const channel = supabase.channel('public:lobbies:' + code);
             channel.on('postgres_changes', { event: '*', schema: 'public', table: 'lobbies', filter: `lobbyId=eq.${code}` }, (payload) => {
                 if (payload?.new) {
-                    currentLobby = payload.new;
+                    currentLobby = normalizeLobbyRow(payload.new);
                     renderLobbyState();
                 }
             });
