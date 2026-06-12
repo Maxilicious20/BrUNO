@@ -470,17 +470,15 @@
         BrUNO Online • Modernes Web-Multiplayer Kartenspiel :3
     </footer>
 
-    <!-- FIREBASE & GAME LOGIC SCRIPTS -->
+    <!-- SUPABASE & GAME LOGIC SCRIPTS -->
+    <!-- Load runtime config (supabase-config.js) if present. For production, replace this with hosting-injected config. -->
+    <script src="./supabase-config.js"></script>
     <script>
-        // Runtime-injected Firebase configuration should be defined before the application module starts.
-        // Example injection by hosting or build system:
-        // window.__firebase_config = { apiKey: 'YOUR_API_KEY', authDomain: 'YOUR_AUTH_DOMAIN', projectId: 'YOUR_PROJECT_ID', storageBucket: 'YOUR_STORAGE_BUCKET', messagingSenderId: 'YOUR_MESSAGING_SENDER_ID', appId: 'YOUR_APP_ID' };
-        window.__firebase_config = window.__firebase_config || {};
+        // Ensure there's at least an object to avoid parse errors if the file is missing.
+        window.__supabase_config = window.__supabase_config || {};
     </script>
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
         // --- ALERT UTILITY (REPLACES WINDOW.ALERT) ---
         window.showAlert = function(title, message) {
@@ -492,40 +490,47 @@
             document.getElementById('custom-alert-modal').classList.add('hidden');
         };
 
-        // Fallback Firebase Configuration Setup gracefully if not injected (avoids Vercel crashes)
-        let firebaseConfig = {};
-        const defaultFirebaseConfig = {
-            apiKey: "",
-            authDomain: "bruno-online.firebaseapp.com",
-            projectId: "bruno-online",
-            storageBucket: "bruno-online.appspot.com",
-            messagingSenderId: "000000000000",
-            appId: "1:000000000000:web:0000000000000000000000"
-        };
+        // Supabase config discovery (supports window.__supabase_config, window.__env__, meta tags, or a JSON script)
+        let supabaseConfig = {};
+        const defaultSupabaseConfig = { supabaseUrl: '', supabaseAnonKey: '' };
 
         try {
-            if (window.__firebase_config && Object.keys(window.__firebase_config).length > 0) {
-                firebaseConfig = typeof window.__firebase_config === 'string'
-                    ? JSON.parse(window.__firebase_config)
-                    : window.__firebase_config;
+            if (window.__supabase_config && Object.keys(window.__supabase_config).length > 0) {
+                supabaseConfig = typeof window.__supabase_config === 'string'
+                    ? JSON.parse(window.__supabase_config)
+                    : window.__supabase_config;
+            } else if (window.__env__ && (window.__env__.REACT_APP_SUPABASE_URL || window.__env__.REACT_APP_SUPABASE_ANON_KEY)) {
+                supabaseConfig = {
+                    supabaseUrl: window.__env__.REACT_APP_SUPABASE_URL,
+                    supabaseAnonKey: window.__env__.REACT_APP_SUPABASE_ANON_KEY
+                };
             } else {
-                firebaseConfig = defaultFirebaseConfig;
+                const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content');
+                const url = meta('REACT_APP_SUPABASE_URL') || meta('supabase-url') || meta('supabase_url');
+                const key = meta('REACT_APP_SUPABASE_ANON_KEY') || meta('supabase-anon-key') || meta('supabase_anon_key');
+                if (url && key) {
+                    supabaseConfig = { supabaseUrl: url, supabaseAnonKey: key };
+                } else {
+                    const jsonScript = document.getElementById('supabase-config');
+                    if (jsonScript) {
+                        supabaseConfig = JSON.parse(jsonScript.textContent || jsonScript.innerText || '{}');
+                    } else {
+                        supabaseConfig = defaultSupabaseConfig;
+                    }
+                }
             }
         } catch (e) {
-            console.warn("Injected Firebase configuration could not be parsed. Using fallback.", e);
-            firebaseConfig = defaultFirebaseConfig;
+            console.warn('Unable to read injected Supabase configuration, using fallback.', e);
+            supabaseConfig = defaultSupabaseConfig;
         }
 
-        // Validate Firebase Configuration
-        if (!firebaseConfig.apiKey) {
-            console.error("Firebase API Key is not configured.");
-            window.showAlert("Firebase Configuration Error", "Die Firebase-Konfiguration ist nicht vollständig. Bitte prüfe deinen Build oder dein Hosting-Setup und stelle sicher, dass der Firebase-Konfigurationswert `window.__firebase_config` gesetzt ist.\n\nBeispiel:\n<script>window.__firebase_config = { apiKey: 'YOUR_API_KEY', authDomain: 'YOUR_AUTH_DOMAIN', projectId: 'YOUR_PROJECT_ID', storageBucket: 'YOUR_STORAGE_BUCKET', messagingSenderId: 'YOUR_MESSAGING_SENDER_ID', appId: 'YOUR_APP_ID' };<\/script>");
-            throw new Error("Firebase configuration missing");
+        if (!supabaseConfig.supabaseUrl || !supabaseConfig.supabaseAnonKey) {
+            console.error('Supabase configuration missing.');
+            window.showAlert('Supabase Configuration Error', 'Die Supabase-Konfiguration ist nicht gesetzt. Füge `supabase-config.js` mit `window.__supabase_config = { supabaseUrl: "...", supabaseAnonKey: "..." }` vor dem Module-Skript ein.');
+            throw new Error('Supabase configuration missing');
         }
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        const supabase = createClient(supabaseConfig.supabaseUrl, supabaseConfig.supabaseAnonKey);
         const appId = window.__app_id || 'bruno-lobby-game';
 
         // --- GLOBAL GAME STATE ---
@@ -536,6 +541,87 @@
         let isSolidarityPlay = false;
         let hasPlayedIntroAnim = false;
         let isAuthReady = false;
+        let unsubscribeLobby = null;
+
+        // Simple local user identity (Supabase anon key works for DB access; we keep a local uid)
+        function generateLocalId() {
+            return 'u_' + Math.random().toString(36).slice(2, 10);
+        }
+
+        async function ensureUser() {
+            if (isAuthReady && user) return user;
+            let stored = localStorage.getItem('bruno_user_id');
+            if (!stored) {
+                stored = generateLocalId();
+                localStorage.setItem('bruno_user_id', stored);
+            }
+            user = { uid: stored };
+            isAuthReady = true;
+
+            // Update UI state to show ready
+            const statusIndicator = document.getElementById('connection-status');
+            statusIndicator.className = "mb-6 py-2 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center justify-center gap-2";
+            statusIndicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Bereit zum Spielen!';
+            document.getElementById('btn-create-lobby').removeAttribute('disabled');
+            document.getElementById('btn-join-lobby').removeAttribute('disabled');
+
+            return user;
+        }
+
+        // Helper DB functions using Supabase
+        async function dbCreateLobby(lobbyObj) {
+            const { data, error } = await supabase.from('lobbies').insert([lobbyObj]).select().single();
+            if (error) throw error;
+            return data;
+        }
+
+        async function dbGetLobby(code) {
+            const { data, error } = await supabase.from('lobbies').select('*').eq('lobbyId', code).single();
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows? adjust per runtime
+            return data;
+        }
+
+        async function dbUpdateLobby(code, patch) {
+            const { data, error } = await supabase.from('lobbies').update(patch).eq('lobbyId', code).select().single();
+            if (error) throw error;
+            return data;
+        }
+
+        function subscribeToLobbyRealtime(code) {
+            // Unsubscribe previous
+            if (unsubscribeLobby) {
+                try { unsubscribeLobby(); } catch (e) { console.warn(e); }
+                unsubscribeLobby = null;
+            }
+
+            // Initial fetch
+            (async () => {
+                try {
+                    const initial = await dbGetLobby(code);
+                    if (initial) {
+                        currentLobby = initial;
+                        renderLobbyState();
+                    }
+                } catch (e) { console.error('Fetch lobby failed', e); }
+            })();
+
+            // Realtime subscription using Postgres changes
+            const channel = supabase.channel('public:lobbies:' + code);
+            channel.on('postgres_changes', { event: '*', schema: 'public', table: 'lobbies', filter: `lobbyId=eq.${code}` }, (payload) => {
+                if (payload?.new) {
+                    currentLobby = payload.new;
+                    renderLobbyState();
+                }
+            });
+            channel.subscribe();
+
+            unsubscribeLobby = () => channel.unsubscribe();
+
+            // UI transitions
+            document.getElementById('screen-lobby').classList.add('hidden');
+            document.getElementById('screen-waiting').classList.remove('hidden');
+            document.getElementById('display-lobby-code').innerText = code;
+        }
 
         // --- SOUNDENGINE (Synthesizer) ---
         let soundEnabled = true;
@@ -610,53 +696,44 @@
             return array;
         }
 
-        // --- AUTH SETUP & CONNECTION STATE CHECK (RULE 3) ---
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.error("Firebase Authentication failed:", err);
-                document.getElementById('connection-status').className = "mb-6 py-2 px-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center";
-                document.getElementById('connection-status').innerHTML = "Server-Verbindung fehlgeschlagen. Überprüfe die Firebase-Konfiguration!";
-            }
-        };
-
-        onAuthStateChanged(auth, (currentUser) => {
-            if (currentUser) {
-                user = currentUser;
-                isAuthReady = true;
-                
-                // Update UI state
-                const statusIndicator = document.getElementById('connection-status');
-                statusIndicator.className = "mb-6 py-2 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center justify-center gap-2";
-                statusIndicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Bereit zum Spielen!';
-                
-                // Enable Lobby buttons
-                document.getElementById('btn-create-lobby').removeAttribute('disabled');
-                document.getElementById('btn-join-lobby').removeAttribute('disabled');
-            }
-        });
-
-        // Safe auth promise resolver wrapper
-        async function ensureAuth() {
-            if (isAuthReady && user) return user;
-            return new Promise((resolve, reject) => {
-                const unsubscribe = onAuthStateChanged(auth, (u) => {
-                    if (u) {
-                        user = u;
-                        isAuthReady = true;
-                        unsubscribe();
-                        resolve(u);
-                    }
-                }, reject);
-            });
+        // Compatibility layer: Map legacy Firebase-like helpers to Supabase-backed functions
+        function doc(/* db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId */) {
+            const id = arguments[arguments.length - 1];
+            return { id };
         }
 
-        initAuth();
+        async function setDoc(ref, data) {
+            // Upsert by lobbyId
+            const { data: res, error } = await supabase.from('lobbies').upsert([data]).select().single();
+            if (error) throw error;
+            return res;
+        }
+
+        async function getDoc(ref) {
+            const { data, error } = await supabase.from('lobbies').select('*').eq('lobbyId', ref.id).maybeSingle();
+            if (error) throw error;
+            return {
+                exists: () => !!data,
+                data: () => data
+            };
+        }
+
+        async function updateDoc(ref, patch) {
+            const { data, error } = await supabase.from('lobbies').update(patch).eq('lobbyId', ref.id).select().single();
+            if (error) throw error;
+            return data;
+        }
+
+        function onSnapshot(ref, onNext, onError) {
+            const channel = supabase.channel('public:lobbies:' + ref.id);
+            channel.on('postgres_changes', { event: '*', schema: 'public', table: 'lobbies', filter: `lobbyId=eq.${ref.id}` }, (payload) => {
+                try {
+                    onNext({ exists: () => !!payload.new, data: () => payload.new });
+                } catch (e) { console.error(e); }
+            });
+            channel.subscribe();
+            return () => channel.unsubscribe();
+        }
 
         // --- NAVIGATION UND TAB-SWITCH ---
         window.switchTab = function(type) {
@@ -727,7 +804,7 @@
             const text = input.value.trim();
             if (!text || !currentLobby) return;
 
-            await ensureAuth();
+            await ensureUser();
 
             const me = currentLobby.players.find(p => p.id === user.uid);
             const senderName = me ? me.name : "Spieler";
@@ -767,7 +844,7 @@
         window.createLobby = async function() {
             try {
                 // Ensure fully authenticated first (RULE 3 compliance)
-                const currentAuthedUser = await ensureAuth();
+                const currentAuthedUser = await ensureUser();
                 if (!currentAuthedUser) {
                     window.showAlert("Verbindungsfehler", "Die Anmeldung am Server läuft noch. Bitte versuche es in wenigen Sekunden erneut!");
                     playSynthSound('error');
@@ -815,7 +892,7 @@
         // --- LOBBY BEITRETEN ---
         window.joinLobby = async function() {
             try {
-                const currentAuthedUser = await ensureAuth();
+                const currentAuthedUser = await ensureUser();
                 if (!currentAuthedUser) {
                     window.showAlert("Verbindungsfehler", "Die Anmeldung am Server läuft noch. Bitte versuche es gleich noch einmal!");
                     playSynthSound('error');
@@ -874,7 +951,6 @@
         };
 
         // --- REALTIME SYNC ---
-        let unsubscribeLobby = null;
         function subscribeToLobby(code) {
             if (unsubscribeLobby) unsubscribeLobby();
 
@@ -1280,7 +1356,7 @@
         window.startGame = async function() {
             if (!currentLobby || currentLobby.hostId !== user.uid) return;
 
-            await ensureAuth();
+            await ensureUser();
 
             let finalDeck = createDeck();
             
@@ -1329,7 +1405,7 @@
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             if (activePlayer.id !== user.uid) return;
 
-            await ensureAuth();
+            await ensureUser();
 
             const me = currentLobby.players.find(p => p.id === user.uid);
             const card = me.cards[idx];
@@ -1385,7 +1461,7 @@
         window.selectSolidarityPartner = async function(partnerId) {
             document.getElementById('solidarity-modal').classList.add('hidden');
             
-            await ensureAuth();
+            await ensureUser();
 
             const me = currentLobby.players.find(p => p.id === user.uid);
             const partner = currentLobby.players.find(p => p.id === partnerId);
@@ -1417,7 +1493,7 @@
             const logs = [...currentLobby.gameLogs];
             logs.push(`${activePlayer.name} legt ${getColorEmoji(card.color)} ${card.color} ${card.value}.`);
 
-            await ensureAuth();
+            await ensureUser();
 
             let winners = [...currentLobby.winners];
             let checkMe = currentLobby.players.find(p => p.id === user.uid);
@@ -1461,7 +1537,7 @@
             isWaitingForColorSelection = false;
             document.getElementById('color-choice-modal').classList.add('hidden');
 
-            await ensureAuth();
+            await ensureUser();
 
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             const me = currentLobby.players.find(p => p.id === user.uid);
@@ -1504,7 +1580,7 @@
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             if (activePlayer.id !== user.uid) return;
 
-            await ensureAuth();
+            await ensureUser();
 
             const me = currentLobby.players.find(p => p.id === user.uid);
             const logs = [...currentLobby.gameLogs];
