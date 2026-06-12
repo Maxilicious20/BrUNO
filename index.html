@@ -568,6 +568,9 @@
             return user;
         }
 
+        // Ensure a local user exists immediately so UI updates
+        ensureUser().catch(e => console.warn('ensureUser failed', e));
+
         // Helper DB functions using Supabase
         async function dbCreateLobby(lobbyObj) {
             const { data, error } = await supabase.from('lobbies').insert([lobbyObj]).select().single();
