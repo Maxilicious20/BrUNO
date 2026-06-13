@@ -578,6 +578,7 @@
             if (!row) return row;
             const normalized = { ...row };
 
+            // Normalize field names from lowercase to camelCase for backward compatibility
             if ('hostid' in row && !('hostId' in row)) normalized.hostId = row.hostid;
             if ('lobbyid' in row && !('lobbyId' in row)) normalized.lobbyId = row.lobbyid;
             if ('discardpile' in row && !('discardPile' in row)) normalized.discardPile = row.discardpile;
@@ -589,6 +590,7 @@
             if ('hasdrawnthisturn' in row && !('hasDrawnThisTurn' in row)) normalized.hasDrawnThisTurn = row.hasdrawnthisturn;
             if ('gamelogs' in row && !('gameLogs' in row)) normalized.gameLogs = row.gamelogs;
 
+            // Parse JSON fields
             const parseJson = field => {
                 if (typeof normalized[field] === 'string') {
                     try {
@@ -600,10 +602,15 @@
             };
             ['players', 'deck', 'discardPile', 'winners', 'chat', 'gameLogs'].forEach(parseJson);
 
+            // Ensure arrays exist
             if (!Array.isArray(normalized.players)) normalized.players = [];
             if (!Array.isArray(normalized.winners)) normalized.winners = [];
             if (!Array.isArray(normalized.chat)) normalized.chat = [];
             if (!Array.isArray(normalized.gameLogs)) normalized.gameLogs = [];
+
+            // Ensure hostId and lobbyId exist
+            if (!normalized.hostId) normalized.hostId = '';
+            if (!normalized.lobbyId) normalized.lobbyId = '';
 
             return normalized;
         }
@@ -981,7 +988,13 @@
                         isReady: true
                     });
                     lobbyData.gameLogs.push(`${name} ist der Lobby beigetreten.`);
-                    await setDoc(lobbyRef, lobbyData);
+                    // Explicitly ensure hostId is preserved when updating
+                    const updatePayload = {
+                        ...lobbyData,
+                        hostId: lobbyData.hostId,  // Explicitly preserve hostId
+                        lobbyId: code
+                    };
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code), updatePayload);
                 }
 
                 lobbyId = code;
@@ -1084,11 +1097,12 @@
                 const list = document.getElementById('lobby-players-list');
                 list.innerHTML = '';
                 document.getElementById('player-count').innerText = currentLobby.players.length;
-                currentLobby.players.forEach(p => {
+                currentLobby.players.forEach((p, idx) => {
                     const isHost = p.id === currentLobby.hostId;
+                    const playerNumber = idx + 1;
                     list.innerHTML += `
                         <div class="flex justify-between items-center bg-white/5 px-4 py-2.5 rounded-xl border border-white/5">
-                            <span class="font-semibold text-stone-200">${p.name} ${isHost ? '👑' : ''}</span>
+                            <span class="font-semibold text-stone-200">#${playerNumber} ${p.name} ${isHost ? '👑' : ''}</span>
                             <span class="text-xs text-stone-500 font-bold uppercase tracking-wider">${p.id === user.uid ? 'DU' : 'Bereit'}</span>
                         </div>
                     `;
@@ -1164,7 +1178,13 @@
             chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
             const me = currentLobby.players.find(p => p.id === user.uid);
-            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
+            const activePlayer = currentLobby.players && currentLobby.players[currentLobby.currentPlayerIndex];
+            
+            if (!activePlayer) {
+                console.warn("Active player not found", currentLobby.currentPlayerIndex, currentLobby.players.length);
+                return;
+            }
+            
             const isMyTurn = activePlayer.id === user.uid;
 
             const banner = document.getElementById('turn-banner');
@@ -1176,10 +1196,13 @@
                 banner.className = "px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-center transition-all bg-white/5 border border-white/10 text-stone-400";
             }
 
-            const lastDiscard = currentLobby.discardPile[currentLobby.discardPile.length - 1];
+            const lastDiscard = currentLobby.discardPile && currentLobby.discardPile.length > 0 
+                ? currentLobby.discardPile[currentLobby.discardPile.length - 1]
+                : null;
             const colorBanner = document.getElementById('active-color-banner');
             const colorName = document.getElementById('active-color-name');
-            if (currentLobby.activeColor !== lastDiscard.color) {
+            
+            if (lastDiscard && currentLobby.activeColor !== lastDiscard.color) {
                 colorBanner.classList.remove('hidden');
                 colorBanner.className = `px-5 py-1.5 rounded-full border text-xs font-bold uppercase tracking-widest bg-black/40 ${getColorClass(currentLobby.activeColor)}`;
                 colorName.innerText = `${getColorEmoji(currentLobby.activeColor)} ${currentLobby.activeColor}`;
@@ -1264,8 +1287,8 @@
             nameEl.innerText = opponent.name;
             countEl.innerText = opponent.cards.length;
 
-            const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
-            if (activePlayer.id === opponent.id) {
+            const activePlayer = currentLobby.players && currentLobby.players[currentLobby.currentPlayerIndex];
+            if (activePlayer && activePlayer.id === opponent.id) {
                 box.className = "bg-emerald-500/15 border-2 border-emerald-500 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300 active-turn-glow";
             } else {
                 box.className = "bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex flex-col items-center w-40 sm:w-48 transition-all duration-300";
@@ -1408,32 +1431,22 @@
         // --- HOST STARTET DAS SPIEL ---
         window.startGame = async function() {
             try {
-                const debug = msg => {
-                    console.log(msg);
-                    const debugEl = document.getElementById('debug-status');
-                    if (debugEl) debugEl.innerText = msg;
-                };
-
-                debug("startGame called");
                 if (!currentLobby) {
-                    debug("ERROR: currentLobby is null");
+                    window.showAlert("Fehler", "Lobby nicht geladen.");
                     return;
                 }
                 if (!user) {
-                    debug("ERROR: user is null");
+                    window.showAlert("Fehler", "Benutzer nicht authentifiziert.");
                     return;
                 }
-                debug("Checking host: hostId=" + currentLobby.hostId + ", user.uid=" + user.uid);
                 if (currentLobby.hostId !== user.uid) {
-                    debug("ERROR: not host");
+                    window.showAlert("Fehler", "Nur der Host kann das Spiel starten.");
                     return;
                 }
 
                 await ensureUser();
-                debug("User ensured");
 
                 let finalDeck = createDeck();
-                debug("Deck created: " + finalDeck.length + " cards");
                 
                 const updatedPlayers = currentLobby.players.map(p => {
                     const cards = [];
@@ -1447,19 +1460,16 @@
                         calledBruno: false
                     };
                 });
-                debug("Players dealt");
 
                 let firstCard = finalDeck.pop();
                 while (firstCard.isWild) {
                     finalDeck.unshift(firstCard);
                     firstCard = finalDeck.pop();
                 }
-                debug("First card: " + firstCard.color + " " + firstCard.value);
 
                 const lobbyRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId);
-                debug("Updating lobby...");
                 
-                await updateDoc(lobbyRef, {
+                const updateData = {
                     status: 'playing',
                     deck: finalDeck,
                     players: updatedPlayers,
@@ -1473,21 +1483,26 @@
                     winners: [],
                     chat: [],
                     gameLogs: ["Das Spiel wurde gestartet!", `Erste Karte ist ${getColorEmoji(firstCard.color)} ${firstCard.color} ${firstCard.value}.`]
-                });
-
-                debug("Lobby updated - status should be 'playing' now");
+                };
+                
+                await updateDoc(lobbyRef, updateData);
                 playSynthSound('special');
             } catch (err) {
                 console.error("startGame error:", err);
-                const debugEl = document.getElementById('debug-status');
-                if (debugEl) debugEl.innerText = "ERROR: " + err.message;
                 window.showAlert("Fehler beim Starten", "Spiel konnte nicht gestartet werden: " + err.message);
+                playSynthSound('error');
             }
         };
 
         // --- KARTE LEGEN ---
         let pendingWildCardIdx = -1;
         window.playCard = async function(idx) {
+            if (!currentLobby || !currentLobby.players || currentLobby.currentPlayerIndex >= currentLobby.players.length) {
+                console.warn("Invalid game state for playCard");
+                window.showAlert("Fehler", "Spielzustand ungültig");
+                return;
+            }
+            
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             if (activePlayer.id !== user.uid) return;
 
@@ -1623,6 +1638,11 @@
             isWaitingForColorSelection = false;
             document.getElementById('color-choice-modal').classList.add('hidden');
 
+            if (!currentLobby || !currentLobby.players || currentLobby.currentPlayerIndex >= currentLobby.players.length) {
+                window.showAlert("Fehler", "Spielzustand ungültig");
+                return;
+            }
+
             await ensureUser();
 
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
@@ -1663,6 +1683,11 @@
 
         // --- AUTOMATISIERTER ZIEH-MECHANISMUS (ZIEHEN BIS SPIELBAR) ---
         window.handleDrawClick = async function() {
+            if (!currentLobby || !currentLobby.players || currentLobby.currentPlayerIndex >= currentLobby.players.length) {
+                window.showAlert("Fehler", "Spielzustand ungültig");
+                return;
+            }
+            
             const activePlayer = currentLobby.players[currentLobby.currentPlayerIndex];
             if (activePlayer.id !== user.uid) return;
 
@@ -1869,11 +1894,30 @@
 
         // --- BACK TO LOBBY ---
         window.backToLobby = function() {
+            // Hide all game screens
             document.getElementById('game-over-modal').classList.add('hidden');
             document.getElementById('screen-game').classList.add('hidden');
             document.getElementById('screen-waiting').classList.add('hidden');
+            
+            // Reset global game state
+            hasPlayedIntroAnim = false;
+            isWaitingForColorSelection = false;
+            isSolidarityPlay = false;
+            currentLobby = null;
+            lobbyId = "";
+            
+            // Unsubscribe from realtime updates
+            if (unsubscribeLobby) {
+                try { unsubscribeLobby(); } catch (e) { console.warn(e); }
+                unsubscribeLobby = null;
+            }
+            
+            // Clear any active modals
+            document.getElementById('color-choice-modal').classList.add('hidden');
+            document.getElementById('solidarity-modal').classList.add('hidden');
+            
+            // Show main lobby screen
             document.getElementById('screen-lobby').classList.remove('hidden');
-            if (unsubscribeLobby) unsubscribeLobby();
         };
 
         window.openRulesModal = function() {
